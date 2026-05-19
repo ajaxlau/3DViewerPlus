@@ -1,0 +1,77 @@
+import { useState, useEffect } from 'react';
+import { ViewerProvider, useViewer } from './context/ViewerContext';
+import { Header } from './components/Header';
+import { Sidebar } from './components/Sidebar';
+import { ViewerCanvas } from './components/ViewerCanvas';
+import { Modals } from './components/Modals';
+
+// Add the global reference for easy hacky access in simple DOM events (like file inputs)
+declare global {
+  interface Window {
+    _viewerManagerInstance: any;
+  }
+}
+
+function MainLayout() {
+  const { viewerManager } = useViewer();
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    window.innerWidth <= 900 || typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+  );
+
+  useEffect(() => {
+    if (viewerManager) {
+      window._viewerManagerInstance = viewerManager;
+      
+      // Auto-load logic from URL attributes when viewer settles
+      const hash = window.location.hash;
+      let modelUrl = null;
+      let pendingCamera = undefined;
+      
+      if (hash && hash.startsWith('#model=')) {
+          try {
+              const hashParams = hash.substring(7).split('$');
+              modelUrl = decodeURIComponent(hashParams[0]);
+              const camParam = hashParams.find((p: string) => p.startsWith('camera='));
+              if (camParam) {
+                  pendingCamera = camParam.substring(7).split(',').map(Number);
+              }
+          } catch (e) { console.warn("Could not decode hash parameter", e); }
+      }
+      if (!modelUrl) {
+          try { const urlParams = new URLSearchParams(window.location.search); modelUrl = urlParams.get('url'); } 
+          catch (e) { console.warn("Could not decode query parameter", e); }
+      }
+
+      if (modelUrl) {
+          setTimeout(() => { viewerManager.loadUrl(modelUrl, pendingCamera); }, 100);
+      }
+    }
+  }, [viewerManager]);
+
+  return (
+    <div className="flex flex-col h-dvh w-dvw overflow-hidden bg-slate-100 dark:bg-slate-950 sm:p-4 text-slate-900 dark:text-slate-200 transition-colors">
+      <div className="flex flex-col flex-1 overflow-hidden sm:border sm:border-slate-300 dark:sm:border-slate-700 bg-white dark:bg-slate-900 shadow-sm rounded-sm">
+        <Header toggleSidebar={() => {
+          setSidebarCollapsed(!sidebarCollapsed);
+          setTimeout(() => {
+            if (viewerManager && viewerManager.viewer) viewerManager.viewer.Resize();
+            if (viewerManager && viewerManager.rulersVisible) viewerManager.resizeRulers();
+          }, 300);
+        }} />
+        <div className="flex flex-1 min-h-0 relative flex-col md:flex-row">
+          <Sidebar collapsed={sidebarCollapsed} />
+          <ViewerCanvas />
+        </div>
+      </div>
+      <Modals />
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <ViewerProvider>
+      <MainLayout />
+    </ViewerProvider>
+  );
+}
