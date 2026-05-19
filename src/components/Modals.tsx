@@ -147,7 +147,9 @@ export function Modals() {
             ) : (
               <div className="flex flex-wrap gap-6 mt-5 mb-7">
                 <div className="flex-1 min-w-[250px] bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-sm flex items-center justify-center overflow-hidden h-[250px] shadow-inner">
-                    <img src={previewSrc} className="max-w-[100%] max-h-[100%] object-contain" alt="Preview"/>
+                    {previewSrc ? (
+                        <img src={previewSrc} className="max-w-[100%] max-h-[100%] object-contain" alt="Preview"/>
+                    ) : null}
                 </div>
                 <div className="w-[250px] flex flex-col gap-3 text-slate-700 dark:text-slate-300 text-sm">
                     <label className="flex items-center gap-3 cursor-pointer">
