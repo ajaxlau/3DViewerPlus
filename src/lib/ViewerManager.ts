@@ -53,8 +53,8 @@ export class ViewerManager {
     this.theme = theme;
     if (this.viewer && this.viewer.viewer) {
       const color = theme === 'dark' 
-        ? new window.OV.RGBAColor(20, 20, 20, 255) 
-        : new window.OV.RGBAColor(240, 240, 240, 255);
+        ? new window.OV.RGBAColor(2, 6, 23, 255) 
+        : new window.OV.RGBAColor(255, 255, 255, 255);
       try { 
         this.viewer.viewer.SetBackgroundColor(color); 
         this.viewer.viewer.Render(); 
@@ -71,8 +71,8 @@ export class ViewerManager {
     if (this.viewer) return;
     try {
       const bgColor = this.theme === 'dark' 
-        ? new window.OV.RGBAColor(20, 20, 20, 255) 
-        : new window.OV.RGBAColor(240, 240, 240, 255);
+        ? new window.OV.RGBAColor(2, 6, 23, 255) 
+        : new window.OV.RGBAColor(255, 255, 255, 255);
 
       this.viewer = new window.OV.EmbeddedViewer(this.container, {
         backgroundColor: bgColor,
@@ -95,9 +95,6 @@ export class ViewerManager {
 
   enforceFreeOrbit() {
     if (!this.viewer || !this.viewer.viewer || !this.viewer.viewer.navigation) return;
-    try {
-      this.viewer.viewer.SetProjectionMode(window.OV.ProjectionMode.Orthographic);
-    } catch (e) {}
     try {
       this.viewer.viewer.navigation.fixUpVector = false;
       const cam = this.viewer.viewer.navigation.camera;
@@ -354,7 +351,7 @@ export class ViewerManager {
           this.modelBBox.union(meshBox);
       });
     }
-    this.updateClippingPlanes(planesState);
+    this.updateClippingPlanes(active ? planesState : null);
   }
 
   updateClippingPlanes(planesState: any) {
@@ -362,12 +359,12 @@ export class ViewerManager {
     const renderer = this.viewer.viewer.renderer;
     renderer.localClippingEnabled = true;
 
-    if (this.modelBBox && !this.modelBBox.isEmpty()) {
+    if (planesState && this.modelBBox && !this.modelBBox.isEmpty()) {
         const activePlanes: any[] = [];
         
         ['x', 'y', 'z'].forEach(axis => {
             const state = planesState[axis];
-            if (state.active) {
+            if (state && state.active) {
                 if (!state.plane) state.plane = new window.THREE.Plane();
                 
                 let min, max;
@@ -412,7 +409,7 @@ export class ViewerManager {
             if (mesh.material) {
                 const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
                 materials.forEach((mat: any) => {
-                    mat.clippingPlanes = [];
+                    mat.clippingPlanes = null;
                     mat.needsUpdate = true;
                 });
             }
@@ -494,18 +491,20 @@ export class ViewerManager {
           this.lastCameraState = '';
           this.updateRulersLoop();
       } else {
-          cancelAnimationFrame(this.rulerAnimationFrame);
+          if (this.rulerAnimationFrame) cancelAnimationFrame(this.rulerAnimationFrame);
       }
   }
 
   resizeRulers() {
       if (this.topRulerRef) {
-          this.topRulerRef.width = this.topRulerRef.clientWidth;
-          this.topRulerRef.height = this.topRulerRef.clientHeight;
+          const rect = this.topRulerRef.getBoundingClientRect();
+          if (this.topRulerRef.width !== rect.width) this.topRulerRef.width = rect.width;
+          if (this.topRulerRef.height !== rect.height) this.topRulerRef.height = rect.height;
       }
       if (this.leftRulerRef) {
-          this.leftRulerRef.width = this.leftRulerRef.clientWidth;
-          this.leftRulerRef.height = this.leftRulerRef.clientHeight;
+          const rect = this.leftRulerRef.getBoundingClientRect();
+          if (this.leftRulerRef.width !== rect.width) this.leftRulerRef.width = rect.width;
+          if (this.leftRulerRef.height !== rect.height) this.leftRulerRef.height = rect.height;
       }
   }
 
@@ -513,16 +512,32 @@ export class ViewerManager {
     if (!this.rulersVisible) return;
     try {
         if (this.viewer?.viewer?.navigation) {
-            const cam = this.viewer.viewer.navigation.GetCamera();
+            let cam: any = null;
+            if (typeof this.viewer.viewer.navigation.GetCamera === 'function') {
+                cam = this.viewer.viewer.navigation.GetCamera();
+            } else if (this.viewer.viewer.navigation.camera) {
+                // Three.js camera + target from controls?
+                const threeCam = this.viewer.viewer.navigation.camera;
+                // In o3dv, perhaps it's stored in get target?
+                cam = {
+                    eye: threeCam.position,
+                    center: this.viewer.viewer.navigation.controls?.target || new window.THREE.Vector3()
+                };
+            }
+            
             if (cam && cam.eye && cam.center) {
-                const stateStr = `${cam.eye.x.toFixed(2)},${cam.eye.y.toFixed(2)},${cam.eye.z.toFixed(2)},${cam.center.x.toFixed(2)},${cam.center.y.toFixed(2)},${cam.center.z.toFixed(2)}`;
+                const canvasRect = this.container.getBoundingClientRect();
+                const stateStr = `${Math.round(cam.eye.x * 100)},${Math.round(cam.eye.y * 100)},${Math.round(cam.eye.z * 100)},${Math.round(cam.center.x * 100)},${Math.round(cam.center.y * 100)},${Math.round(cam.center.z * 100)},${Math.round(canvasRect.width)},${Math.round(canvasRect.height)}`;
                 if (stateStr !== this.lastCameraState) { 
-                    this.lastCameraState = stateStr; 
+                    this.lastCameraState = stateStr;
+                    this.resizeRulers(); 
                     this.drawRulers(cam, this.topRulerRef, this.leftRulerRef); 
                 }
             }
         }
-    } catch(e) {}
+    } catch(e) {
+        console.error("Rulers error:", e);
+    }
     this.rulerAnimationFrame = requestAnimationFrame(this.updateRulersLoop);
   }
 

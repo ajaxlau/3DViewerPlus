@@ -61,8 +61,8 @@ export function ViewerCanvas() {
         <div className="absolute top-0 left-0 w-6 h-6 bg-slate-50 dark:bg-slate-900 border-r border-b border-slate-200 dark:border-slate-800 flex items-center justify-center text-[9px] font-bold text-slate-500 z-20 box-border">
           mm
         </div>
-        <canvas ref={(el) => { if(el) setTimeout(() => setRulerRefs(el, null), 0) }} id="ruler-top" className="absolute top-0 left-6 right-0 h-6 w-[calc(100%-24px)] z-10 block" />
-        <canvas ref={(el) => { if(el) setTimeout(() => setRulerRefs(null, el), 0) }} id="ruler-left" className="absolute top-6 left-0 bottom-0 w-6 h-[calc(100%-24px)] z-10 block" />
+        <canvas ref={(el) => { if(el) setTimeout(() => setRulerRefs(el), 0) }} id="ruler-top" className="absolute top-0 left-6 right-0 h-6 w-[calc(100%-24px)] z-10 block" />
+        <canvas ref={(el) => { if(el) setTimeout(() => setRulerRefs(undefined, el), 0) }} id="ruler-left" className="absolute top-6 left-0 bottom-0 w-6 h-[calc(100%-24px)] z-10 block" />
       </div>
 
       {/* Empty State */}

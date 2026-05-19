@@ -26,17 +26,16 @@ export function Header({ toggleSidebar }: { toggleSidebar: () => void }) {
           alt="3DPO Logo" 
           className="h-6 w-auto max-w-[150px] object-contain mix-blend-multiply dark:mix-blend-screen dark:invert dark:hue-rotate-180" 
         />
-        <span className="bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900 px-2 py-1 rounded-sm">NTEC</span>
         <span className="whitespace-nowrap md:text-[14px] text-xs truncate max-w-[200px] md:max-w-none">
-          3D Printing Office
+          NTEC 3D Printing Office
         </span>
       </div>
       
       <div className="flex items-center gap-1.5 flex-wrap w-full md:w-auto justify-start md:justify-end text-slate-500 dark:text-slate-400">
-        <button className="w-8 h-8 rounded shrink-0 flex items-center justify-center transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 md:hidden" onClick={toggleSidebar} title="Toggle Sidebar">
+        <button className="w-8 h-8 rounded shrink-0 flex items-center justify-center transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-blue-600 dark:hover:text-blue-400" onClick={toggleSidebar} title="Toggle Sidebar">
           <Menu size={18} />
         </button>
-        <div className="w-[1px] h-5 bg-slate-200 dark:bg-slate-700 mx-2 md:hidden hidden sm:block"></div>
+        <div className="w-[1px] h-5 bg-slate-200 dark:bg-slate-700 mx-2 hidden sm:block"></div>
         
         <button className="w-8 h-8 rounded shrink-0 flex items-center justify-center transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-blue-600 dark:hover:text-blue-400" onClick={handleOpenFiles} title="Open File(s)">
           <FolderOpen size={18} />

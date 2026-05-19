@@ -48,7 +48,7 @@ interface ViewerContextState {
   setActiveModal: (modal: 'url' | 'share' | 'embed' | 'snapshot' | null) => void;
 
   setContainerRef: (ref: HTMLElement | null) => void;
-  setRulerRefs: (topRef: HTMLCanvasElement | null, leftRef: HTMLCanvasElement | null) => void;
+  setRulerRefs: (topRef?: HTMLCanvasElement | null, leftRef?: HTMLCanvasElement | null) => void;
 }
 
 const ViewerContext = createContext<ViewerContextState | null>(null);
@@ -117,6 +117,7 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
         manager.setRulerCanvases(topRulerRef.current, leftRulerRef.current);
       }
       setViewerManager(manager);
+      (window as any)._viewerManagerInstance = manager;
       
       // Delay resize to ensure the layout has fully resolved
       setTimeout(() => {
@@ -132,11 +133,11 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
     initManagerIfReady();
   };
 
-  const setRulerRefs = (topRef: HTMLCanvasElement | null, leftRef: HTMLCanvasElement | null) => {
-    topRulerRef.current = topRef;
-    leftRulerRef.current = leftRef;
-    if (viewerManager && topRef && leftRef) {
-      viewerManager.setRulerCanvases(topRef, leftRef);
+  const setRulerRefs = (topRef?: HTMLCanvasElement | null, leftRef?: HTMLCanvasElement | null) => {
+    if (topRef !== undefined) topRulerRef.current = topRef;
+    if (leftRef !== undefined) leftRulerRef.current = leftRef;
+    if (viewerManager && topRulerRef.current && leftRulerRef.current) {
+      viewerManager.setRulerCanvases(topRulerRef.current, leftRulerRef.current);
     }
   };
 
