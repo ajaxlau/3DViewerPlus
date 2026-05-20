@@ -1,6 +1,6 @@
 {
-  "name": "",
-  "description": "",
+  "name": "NTEC 3D Printing Office - 3DWebViewer",
+  "description": "An interactive 3D model viewer and PWA for inspecting 3D printing jobs, measuring dimensions, clipping, and customizing view options.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

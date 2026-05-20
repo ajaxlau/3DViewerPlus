@@ -1,8 +1,30 @@
-import { Menu, FolderOpen, Link, Share2, Code, Camera, Ruler, Moon, Sun } from 'lucide-react';
+import { Menu, FolderOpen, Link, Share2, Code, Camera, Ruler, Moon, Sun, Download } from 'lucide-react';
 import { useViewer } from '../context/ViewerContext';
+import { useState, useEffect } from 'react';
 
 export function Header({ toggleSidebar }: { toggleSidebar: () => void }) {
   const { theme, setTheme, setActiveModal, toggleRulers, rulersVisible } = useViewer();
+  const [installPrompt, setInstallPrompt] = useState<any>(null);
+
+  useEffect(() => {
+    const handleBeforeInstallEvent = (e: Event) => {
+      e.preventDefault();
+      setInstallPrompt(e);
+    };
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallEvent);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallEvent);
+    };
+  }, []);
+
+  const handleInstallApp = async () => {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    const { outcome } = await installPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setInstallPrompt(null);
+    }
+  };
 
   // Create a hidden file input programmatically to trigger load
   const handleOpenFiles = () => {
@@ -62,6 +84,16 @@ export function Header({ toggleSidebar }: { toggleSidebar: () => void }) {
         >
           <Ruler size={18} />
         </button>
+        {installPrompt && (
+          <button 
+            className="px-2.5 h-8 gap-1.5 rounded shrink-0 flex items-center justify-center transition-all bg-blue-600 dark:bg-blue-500 hover:bg-blue-700 dark:hover:bg-blue-600 text-white font-medium text-xs shadow-sm animate-pulse" 
+            onClick={handleInstallApp} 
+            title="Install App"
+          >
+            <Download size={14} />
+            <span>Install App</span>
+          </button>
+        )}
         <button className="w-8 h-8 rounded shrink-0 flex items-center justify-center transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-blue-600 dark:hover:text-blue-400" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} title="Toggle Dark Mode">
           {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
         </button>
