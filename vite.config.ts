@@ -6,6 +6,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 export default defineConfig(() => {
   return {
+    base: './',
     plugins: [
       react(), 
       tailwindcss(),
@@ -20,7 +21,7 @@ export default defineConfig(() => {
           theme_color: '#ffffff',
           background_color: '#ffffff',
           display: 'standalone',
-          start_url: '/',
+          start_url: './',
           icons: [
             {
               src: 'https://ajaxlau.github.io/3DWebViewer/3DPO_Small_Logo.png',
