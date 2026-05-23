@@ -6,7 +6,7 @@ declare global {
 }
 
 export interface ViewerManagerConfig {
-  onStatusChange: (status: string, isEmpty: boolean, filename?: string, url?: string) => void;
+  onStatusChange: (status: string, isEmpty: boolean, filename?: string, url?: string | null) => void;
   onMeshesChange: (meshes: { id: number, name: string, visible: boolean, opacity: number }[]) => void;
   onMeshHighlighted: (id: number | null) => void;
 }
@@ -112,7 +112,7 @@ export class ViewerManager {
     const fileArray = Array.from(files);
     const filename = fileArray[0].name;
 
-    this.config.onStatusChange('Loading model data...', false, filename, undefined);
+    this.config.onStatusChange('Loading model data...', false, filename, null);
     
     try {
       this.viewer.LoadModelFromFileList(fileArray);

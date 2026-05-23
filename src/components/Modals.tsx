@@ -59,8 +59,79 @@ export function Modals() {
     }
   };
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text);
+  const copyToClipboard = async (text: string) => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+        alert("Copied to clipboard!");
+      } else {
+        throw new Error("Clipboard API not available");
+      }
+    } catch (err) {
+      // Fallback
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      textArea.style.position = 'fixed';
+      textArea.style.top = '-999999px';
+      textArea.style.left = '-999999px';
+      document.body.appendChild(textArea);
+      textArea.select();
+      try {
+        document.execCommand('copy');
+        alert("Copied to clipboard!");
+      } catch (e) {
+        alert("Failed to copy. Please copy manually.");
+      }
+      document.body.removeChild(textArea);
+    }
+  };
+
+  const dataURIToBlob = (dataURI: string) => {
+    const splitDataURI = dataURI.split(',');
+    const byteString = splitDataURI[0].indexOf('base64') >= 0 ? atob(splitDataURI[1]) : decodeURI(splitDataURI[1]);
+    const mimeString = splitDataURI[0].split(':')[1].split(';')[0];
+    const ia = new Uint8Array(byteString.length);
+    for (let i = 0; i < byteString.length; i++) {
+        ia[i] = byteString.charCodeAt(i);
+    }
+    return new Blob([ia], { type: mimeString });
+  };
+
+  const handleShareWhatsApp = async () => {
+    if (!window._viewerManagerInstance) return;
+    let targetW = 1920, targetH = 1080;
+    if (snapRes === 'small') { targetW = 1280; targetH = 720; }
+    else if (snapRes === 'large') { targetW = 2560; targetH = 1440; }
+    else if (snapRes === 'custom') { targetW = snapW; targetH = snapH; }
+    
+    const dataUrl = window._viewerManagerInstance.captureSnapshot(targetW, targetH, snapTrans);
+    if (!dataUrl) return;
+
+    try {
+      const blob = dataURIToBlob(dataUrl);
+      const dlName = filename || 'snapshot';
+      const file = new File([blob], `${dlName.replace(/\.[^/.]+$/, "")}_snapshot.png`, { type: 'image/png' });
+      
+      if (navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          files: [file],
+          title: '3D Model Snapshot',
+          text: 'Check out this 3D model snapshot!'
+        });
+      } else {
+        // Fallback for desktops: download the image and redirect to WhatsApp Web
+        const link = document.createElement('a');
+        link.href = dataUrl;
+        link.download = file.name;
+        link.click();
+        
+        const url = `https://wa.me/?text=${encodeURIComponent('Here is my 3D model snapshot! (The image has been downloaded locally)')}`;
+        window.open(url, '_blank');
+      }
+    } catch (e) {
+      console.warn('Error sharing to WhatsApp', e);
+    }
+    setActiveModal(null);
   };
 
   const handleCreateSnapshot = () => {
@@ -127,12 +198,23 @@ export function Modals() {
                 )}
                 </>
             )}
-            <div className="flex justify-end gap-3">
+            <div className="flex justify-between items-center mt-5">
               <button className="px-5 py-2.5 rounded-sm text-xs font-bold uppercase tracking-widest border border-slate-300 dark:border-slate-700 bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800" onClick={() => setActiveModal(null)}>Close</button>
               {loadedUrl && (
-                  <button className="px-5 py-2.5 rounded-sm text-xs font-bold uppercase tracking-widest bg-blue-600 text-white hover:bg-blue-700 border-none" onClick={() => copyToClipboard(activeModal === 'share' ? shareVal : embedVal)}>
-                    Copy {activeModal === 'share' ? 'Link' : 'Code'}
-                  </button>
+                  <div className="flex gap-3">
+                    {activeModal === 'share' && (
+                      <button 
+                        className="flex items-center gap-2 px-5 py-2.5 rounded-sm text-xs font-bold uppercase tracking-widest bg-green-600 text-white hover:bg-green-700 border-none shadow-sm transition-colors" 
+                        onClick={handleShareWhatsApp}
+                      >
+                        <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" className="css-i6dzq1"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
+                        WhatsApp Snapshot
+                      </button>
+                    )}
+                    <button className="px-5 py-2.5 rounded-sm text-xs font-bold uppercase tracking-widest bg-blue-600 text-white hover:bg-blue-700 border-none" onClick={() => copyToClipboard(activeModal === 'share' ? shareVal : embedVal)}>
+                      Copy {activeModal === 'share' ? 'Link' : 'Code'}
+                    </button>
+                  </div>
               )}
             </div>
            </>
@@ -183,10 +265,29 @@ export function Modals() {
                 </div>
               </div>
             )}
-            <div className="flex justify-end gap-3 border-t border-slate-200 dark:border-slate-800 pt-5">
-              <button className="px-5 py-2.5 rounded-sm text-xs font-bold uppercase tracking-widest border border-slate-300 dark:border-slate-700 bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800" onClick={() => setActiveModal(null)}>Cancel</button>
+            <div className="flex justify-between items-center border-t border-slate-200 dark:border-slate-800 pt-5">
+              <button 
+                className="px-5 py-2.5 rounded-sm text-xs font-bold uppercase tracking-widest border border-slate-300 dark:border-slate-700 bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800" 
+                onClick={() => setActiveModal(null)}
+              >
+                Cancel
+              </button>
               {!isEmpty && (
-                <button className="px-5 py-2.5 rounded-sm text-xs font-bold uppercase tracking-widest bg-blue-600 text-white hover:bg-blue-700 border-none" onClick={handleCreateSnapshot}>Create</button>
+                <div className="flex gap-3">
+                  <button 
+                    className="flex items-center gap-2 px-5 py-2.5 rounded-sm text-xs font-bold uppercase tracking-widest bg-green-600 text-white hover:bg-green-700 border-none shadow-sm transition-colors" 
+                    onClick={handleShareWhatsApp}
+                  >
+                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" className="css-i6dzq1"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
+                    WhatsApp
+                  </button>
+                  <button 
+                    className="px-5 py-2.5 rounded-sm text-xs font-bold uppercase tracking-widest bg-blue-600 text-white hover:bg-blue-700 border-none shadow-sm transition-colors" 
+                    onClick={handleCreateSnapshot}
+                  >
+                    Create
+                  </button>
+                </div>
               )}
             </div>
           </>
