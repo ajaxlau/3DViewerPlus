@@ -10,6 +10,16 @@
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/online-3d-viewer@latest/build/engine/o3dv.min.js" crossorigin="anonymous"></script>
   </head>
   <body>
+    <script>
+      // Clear any old dev service workers to prevent caching /src/main.tsx
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+          for(let registration of registrations) {
+            registration.unregister();
+          }
+        });
+      }
+    </script>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
