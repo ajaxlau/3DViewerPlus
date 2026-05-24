@@ -22,13 +22,13 @@ export function Modals() {
   useEffect(() => {
     if (activeModal === 'share' || activeModal === 'embed') {
       let baseUrl = window.location.href.split('#')[0].split('?')[0];
-      const isSandboxUrl = baseUrl.startsWith('blob:') || baseUrl.includes('.webcomponent.local') || window.location.hostname === 'localhost';
+      const isSandboxUrl = baseUrl.startsWith('blob:') || baseUrl.includes('.webcomponent.local') || window.location.hostname === 'localhost' || window.location.hostname.includes('.run.app');
       setIsSandbox(isSandboxUrl);
       
       if (!isEmpty && loadedUrl) {
          if (isSandboxUrl) {
-           setShareVal(`https://your-website.com/#model=${encodeURIComponent(loadedUrl)}`);
-           setEmbedVal(`<iframe width="640" height="480" style="border:1px solid #eeeeee;" src="https://your-website.com/#model=${encodeURIComponent(loadedUrl)}$backgroundcolor=240,240,240,255$defaultcolor=200,200,200$edgesettings=off,0,0,0,1"></iframe>`);
+           setShareVal(`https://ajaxlau.github.io/3DViewerWebApp/#model=${encodeURIComponent(loadedUrl)}`);
+           setEmbedVal(`<iframe width="640" height="480" style="border:1px solid #eeeeee;" src="https://ajaxlau.github.io/3DViewerWebApp/#model=${encodeURIComponent(loadedUrl)}$backgroundcolor=240,240,240,255$defaultcolor=200,200,200$edgesettings=off,0,0,0,1"></iframe>`);
          } else {
            setShareVal(`${baseUrl}#model=${encodeURIComponent(loadedUrl)}`);
            setEmbedVal(`<iframe width="640" height="480" style="border:1px solid #eeeeee;" src="${baseUrl}#model=${encodeURIComponent(loadedUrl)}$backgroundcolor=240,240,240,255$defaultcolor=200,200,200$edgesettings=off,0,0,0,1"></iframe>`);
@@ -59,11 +59,14 @@ export function Modals() {
     }
   };
 
+  const [copied, setCopied] = useState(false);
+
   const copyToClipboard = async (text: string) => {
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(text);
-        alert("Copied to clipboard!");
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
       } else {
         throw new Error("Clipboard API not available");
       }
@@ -78,9 +81,10 @@ export function Modals() {
       textArea.select();
       try {
         document.execCommand('copy');
-        alert("Copied to clipboard!");
+        setCopied(true);
+        setTimeout(() => setCopied(false), 2000);
       } catch (e) {
-        alert("Failed to copy. Please copy manually.");
+        console.warn("Failed to copy", e);
       }
       document.body.removeChild(textArea);
     }
@@ -198,23 +202,31 @@ export function Modals() {
                 )}
                 </>
             )}
-            <div className="flex justify-between items-center mt-5">
-              <button className="px-5 py-2.5 rounded-sm text-xs font-bold uppercase tracking-widest border border-slate-300 dark:border-slate-700 bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800" onClick={() => setActiveModal(null)}>Close</button>
+            <div className="flex justify-end items-center gap-3 mt-6 w-full">
+              <button 
+                className="flex-1 max-w-[120px] h-10 px-3 rounded-sm text-xs font-bold uppercase tracking-widest border border-slate-300 dark:border-slate-700 bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center justify-center text-center font-bold" 
+                onClick={() => setActiveModal(null)}
+              >
+                Close
+              </button>
               {loadedUrl && (
-                  <div className="flex gap-3">
-                    {activeModal === 'share' && (
-                      <button 
-                        className="flex items-center gap-2 px-5 py-2.5 rounded-sm text-xs font-bold uppercase tracking-widest bg-green-600 text-white hover:bg-green-700 border-none shadow-sm transition-colors" 
-                        onClick={handleShareWhatsApp}
-                      >
-                        <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" className="css-i6dzq1"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
-                        WhatsApp Snapshot
-                      </button>
-                    )}
-                    <button className="px-5 py-2.5 rounded-sm text-xs font-bold uppercase tracking-widest bg-blue-600 text-white hover:bg-blue-700 border-none" onClick={() => copyToClipboard(activeModal === 'share' ? shareVal : embedVal)}>
-                      Copy {activeModal === 'share' ? 'Link' : 'Code'}
+                <>
+                  {activeModal === 'share' && (
+                    <button 
+                      className="flex-1 max-w-[130px] h-10 px-3 rounded-sm text-xs font-bold uppercase tracking-widest bg-green-600 text-white hover:bg-green-700 border-none shadow-sm transition-colors flex items-center justify-center gap-1.5 text-center font-bold" 
+                      onClick={handleShareWhatsApp}
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
+                      <span className="truncate">WhatsApp</span>
                     </button>
-                  </div>
+                  )}
+                  <button 
+                    className="flex-1 max-w-[130px] h-10 px-3 rounded-sm text-xs font-bold uppercase tracking-widest bg-blue-600 text-white hover:bg-blue-700 border-none shadow-sm transition-colors flex items-center justify-center text-center font-bold" 
+                    onClick={() => copyToClipboard(activeModal === 'share' ? shareVal : embedVal)}
+                  >
+                    <span className="truncate">{copied ? "Copied!" : `Copy ${activeModal === 'share' ? 'Link' : 'Code'}`}</span>
+                  </button>
+                </>
               )}
             </div>
            </>
@@ -265,29 +277,20 @@ export function Modals() {
                 </div>
               </div>
             )}
-            <div className="flex justify-between items-center border-t border-slate-200 dark:border-slate-800 pt-5">
+            <div className="flex justify-between items-center border-t border-slate-200 dark:border-slate-800 pt-5 mt-5">
               <button 
-                className="px-5 py-2.5 rounded-sm text-xs font-bold uppercase tracking-widest border border-slate-300 dark:border-slate-700 bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800" 
+                className="h-10 px-5 rounded-sm text-xs font-bold uppercase tracking-widest border border-slate-300 dark:border-slate-700 bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors font-bold flex items-center justify-center" 
                 onClick={() => setActiveModal(null)}
               >
                 Cancel
               </button>
               {!isEmpty && (
-                <div className="flex gap-3">
-                  <button 
-                    className="flex items-center gap-2 px-5 py-2.5 rounded-sm text-xs font-bold uppercase tracking-widest bg-green-600 text-white hover:bg-green-700 border-none shadow-sm transition-colors" 
-                    onClick={handleShareWhatsApp}
-                  >
-                    <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" className="css-i6dzq1"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
-                    WhatsApp
-                  </button>
-                  <button 
-                    className="px-5 py-2.5 rounded-sm text-xs font-bold uppercase tracking-widest bg-blue-600 text-white hover:bg-blue-700 border-none shadow-sm transition-colors" 
-                    onClick={handleCreateSnapshot}
-                  >
-                    Create
-                  </button>
-                </div>
+                <button 
+                  className="h-10 px-6 rounded-sm text-xs font-bold uppercase tracking-widest bg-blue-600 text-white hover:bg-blue-700 border-none shadow-sm transition-colors font-bold flex items-center justify-center" 
+                  onClick={handleCreateSnapshot}
+                >
+                  Save Image
+                </button>
               )}
             </div>
           </>

@@ -51,6 +51,7 @@ export class ViewerManager {
 
   setTheme(theme: 'light' | 'dark') {
     this.theme = theme;
+    this.lastCameraState = '';
     if (this.viewer && this.viewer.viewer) {
       const color = theme === 'dark' 
         ? new window.OV.RGBAColor(2, 6, 23, 255) 

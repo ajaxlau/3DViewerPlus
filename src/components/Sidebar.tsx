@@ -7,7 +7,7 @@ export function Sidebar({ collapsed }: { collapsed: boolean }) {
     status, filename, meshes, globalOpacity, setGlobalOpacity, 
     toggleMeshVisibility, setMeshOpacity, highlightMesh, highlightedMeshId,
     isClipping, setIsClipping, clipPlanes, updateClipPlane,
-    explodeValue, setExplodeValue
+    explodeValue, setExplodeValue, isEmpty
   } = useViewer();
 
   const [meshVisOpen, setMeshVisOpen] = useState(true);
@@ -17,21 +17,38 @@ export function Sidebar({ collapsed }: { collapsed: boolean }) {
     <aside className={`transition-all duration-300 bg-slate-50 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex-col overflow-y-auto overflow-x-hidden ${collapsed ? 'w-0 opacity-0 border-none pointer-events-none' : 'md:w-[280px] w-full shrink-0 flex'}`}>
       <div className="flex flex-col w-full min-h-min pb-5">
         
-        <div className="px-6 py-4 text-[11px] font-bold uppercase tracking-[0.05em] text-slate-400 border-b border-slate-200 dark:border-slate-800 whitespace-nowrap overflow-hidden text-ellipsis">
+        <div className="px-6 py-4 text-[11px] font-bold uppercase tracking-[0.05em] text-slate-400 border-b border-slate-200 dark:border-slate-800 break-all line-clamp-2 leading-normal">
           {filename || '3D Model'}
         </div>
-        <div className="p-6">
-          <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded p-4 text-[13px] text-slate-600 dark:text-slate-400 text-center shadow-sm">
-            {status.includes('Loading') || status.includes('Parsing') ? (
-              <div className="flex flex-col items-center justify-center text-blue-600 dark:text-blue-500 pt-2 pb-1">
-                <Loader2 className="animate-spin mb-2" size={24} />
-                <span className="text-slate-800 dark:text-slate-200 whitespace-pre-line text-sm">{status.replace(/\*\*/g, '')}</span>
+        {/* System Status Box */}
+        {(!isEmpty && !status.includes('Loading') && !status.includes('Parsing') && !status.includes('Error')) ? null : (
+          <div className="p-6">
+            <div className="bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded p-4 text-[13px] text-slate-600 dark:text-slate-400 text-center shadow-sm">
+              <div className="flex items-center gap-1.5 mb-2.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500 font-mono justify-center">
+                <span className="relative flex h-2 w-2">
+                  {(status.includes('Loading') || status.includes('Parsing')) && (
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                  )}
+                  <span className={`relative inline-flex rounded-full h-2 w-2 ${
+                    status.includes('Error') ? 'bg-red-500' :
+                    (status.includes('Loading') || status.includes('Parsing')) ? 'bg-blue-500' : 'bg-slate-400'
+                  }`}></span>
+                </span>
+                <span>System Status</span>
               </div>
-            ) : (
-              <span className="whitespace-pre-line text-slate-800 dark:text-slate-200" dangerouslySetInnerHTML={{ __html: status.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }} />
-            )}
+              <div className="text-slate-700 dark:text-slate-300">
+                {status.includes('Loading') || status.includes('Parsing') ? (
+                  <div className="flex flex-col items-center justify-center text-blue-600 dark:text-blue-500">
+                    <Loader2 className="animate-spin mb-2" size={24} />
+                    <span className="text-slate-800 dark:text-slate-200 whitespace-pre-line text-xs font-semibold">{status.replace(/\*\*/g, '')}</span>
+                  </div>
+                ) : (
+                  <span className="whitespace-pre-line text-sm" dangerouslySetInnerHTML={{ __html: status.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }} />
+                )}
+              </div>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="flex justify-between items-center cursor-pointer px-6 py-4 text-[11px] font-bold uppercase tracking-[0.05em] text-slate-400 border-t border-b border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800" onClick={() => setMeshVisOpen(!meshVisOpen)}>
           <span>Mesh Visibility</span>
@@ -63,7 +80,13 @@ export function Sidebar({ collapsed }: { collapsed: boolean }) {
                 meshes.map((mesh) => (
                   <div 
                     key={mesh.id}
-                    className={`border-b border-slate-100 dark:border-slate-800/50 py-3 text-[13px] cursor-pointer transition-all duration-200 ${highlightedMeshId === mesh.id ? 'text-blue-600 dark:text-blue-400 font-semibold' : 'text-slate-700 dark:text-slate-300'}`}
+                    className={`border-b border-slate-100 dark:border-slate-800/50 py-3 text-[13px] cursor-pointer transition-all duration-200 ${highlightedMeshId === mesh.id ? 'text-blue-600 dark:text-blue-400 font-semibold bg-slate-100/50 dark:bg-slate-800/30' : 'text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800/20'}`}
+                    onMouseEnter={() => {
+                      highlightMesh(mesh.id);
+                    }}
+                    onMouseLeave={() => {
+                      highlightMesh(null);
+                    }}
                     onClick={(e) => {
                       if ((e.target as HTMLElement).closest('button') || (e.target as HTMLElement).closest('input')) return;
                       highlightMesh(highlightedMeshId === mesh.id ? null : mesh.id);
