@@ -119,8 +119,7 @@ export function Modals() {
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({
           files: [file],
-          title: '3D Model Snapshot',
-          text: 'Check out this 3D model snapshot!'
+          title: '3D Model Snapshot'
         });
       } else {
         // Fallback for desktops: download the image and redirect to WhatsApp Web
@@ -129,7 +128,7 @@ export function Modals() {
         link.download = file.name;
         link.click();
         
-        const url = `https://wa.me/?text=${encodeURIComponent('Here is my 3D model snapshot! (The image has been downloaded locally)')}`;
+        const url = `https://wa.me/?text=`;
         window.open(url, '_blank');
       }
     } catch (e) {
@@ -216,7 +215,7 @@ export function Modals() {
                         className="flex-1 max-w-[130px] h-10 px-3 rounded-sm text-xs font-bold uppercase tracking-widest bg-green-600 text-white hover:bg-green-700 border-none shadow-sm transition-colors flex items-center justify-center gap-1.5 text-center font-bold" 
                         onClick={async () => {
                             let sharedOk = false;
-                            const shareText = 'Check out this 3D model: ' + shareVal;
+                            const shareText = shareVal;
                             if (window._viewerManagerInstance) {
                                 try {
                                     const dataUrl = window._viewerManagerInstance.captureSnapshot(1920, 1080, false);
