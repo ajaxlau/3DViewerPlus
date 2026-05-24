@@ -14,7 +14,7 @@ export function Sidebar({ collapsed }: { collapsed: boolean }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
   return (
-    <aside className={`transition-all duration-300 bg-slate-50 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex-col overflow-y-auto overflow-x-hidden ${collapsed ? 'w-0 opacity-0 border-none pointer-events-none' : 'md:w-[280px] w-full shrink-0 flex'}`}>
+    <aside className={`transition-all duration-300 bg-slate-50 dark:bg-slate-900 flex-col overflow-y-auto overflow-x-hidden shrink-0 ${collapsed ? 'w-full md:w-0 h-0 md:h-auto opacity-0 border-none pointer-events-none' : 'w-full md:w-[280px] h-[50vh] md:h-auto border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-800 flex'}`}>
       <div className="flex flex-col w-full min-h-min pb-5">
         
         <div className="px-6 py-4 text-[11px] font-bold uppercase tracking-[0.05em] text-slate-400 border-b border-slate-200 dark:border-slate-800 break-all line-clamp-2 leading-normal">

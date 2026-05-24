@@ -91,6 +91,15 @@ export class ViewerManager {
       });
       this.enforceFreeOrbit();
 
+      const resizeObserver = new ResizeObserver(() => {
+        if (this.viewer) this.viewer.Resize();
+        if (this.rulersVisible) {
+          this.resizeRulers();
+          this.lastCameraState = '';
+        }
+      });
+      resizeObserver.observe(this.container);
+
       window.addEventListener('resize', () => {
         if (this.viewer) this.viewer.Resize();
         if (this.rulersVisible) {
@@ -396,9 +405,9 @@ export class ViewerManager {
       }
   }
 
-  confirmPlanningObject(options: { planeWidth?: number, planeHeight?: number, cylinderRadius?: number, cylinderExtension?: number } = {}) {
+  confirmPlanningObject(options: { planeExtWidth?: number, planeExtLength?: number, cylinderRadius?: number, cylinderExtension?: number } = {}) {
       if (this.planningMode === 'plane' && this.planningPoints.length === 3) {
-          this.createPlanningPlane(this.planningPoints[0], this.planningPoints[1], this.planningPoints[2], options.planeWidth, options.planeHeight);
+          this.createPlanningPlane(this.planningPoints[0], this.planningPoints[1], this.planningPoints[2], options.planeExtWidth, options.planeExtLength);
           this.setPlanningMode('none');
           if (this.config.onPlanningObjectsChange) {
               this.config.onPlanningObjectsChange(this.planningObjects);
@@ -412,7 +421,7 @@ export class ViewerManager {
       }
   }
 
-  createPlanningPlane(p1: any, p2: any, p3: any, customWidth?: number, customHeight?: number) {
+  createPlanningPlane(p1: any, p2: any, p3: any, extWidth?: number, extLength?: number) {
       if (!window.THREE || !this.viewer || !this.viewer.viewer) return;
       const scene = this.viewer.viewer.scene || this.viewer.viewer.mainScene;
       if (!scene) return;
@@ -424,8 +433,15 @@ export class ViewerManager {
       const v2 = new THREE.Vector3().subVectors(p3, p1);
       const normal = new THREE.Vector3().crossVectors(v1, v2).normalize();
       
-      const width = customWidth || 100;
-      const height = customHeight || 100;
+      // Calculate base dimensions from selected points
+      const baseWidth = p1.distanceTo(p2);
+      
+      const lineDir = new THREE.Vector3().copy(v1).normalize();
+      // Distance from p3 to line p1-p2
+      const baseLength = new THREE.Vector3().crossVectors(new THREE.Vector3().subVectors(p3, p1), lineDir).length();
+
+      const width = baseWidth + (extWidth !== undefined ? extWidth : 10);
+      const height = baseLength + (extLength !== undefined ? extLength : 10);
 
       const geometry = new THREE.PlaneGeometry(width, height);
       const material = new THREE.MeshBasicMaterial({ 
@@ -444,8 +460,24 @@ export class ViewerManager {
       // Orient the plane
       const testNormal = new THREE.Vector3(0, 0, 1);
       const quaternion = new THREE.Quaternion().setFromUnitVectors(testNormal, normal);
+      
+      const yAxis = new THREE.Vector3().crossVectors(normal, lineDir).normalize();
+      const basis = new THREE.Matrix4().makeBasis(lineDir, yAxis, normal);
+      quaternion.setFromRotationMatrix(basis);
+
       mesh.quaternion.copy(quaternion);
       mesh.position.copy(center);
+
+      // Add a wireframe outline to "illustrate planning"
+      const edges = new THREE.EdgesGeometry(geometry);
+      const lineMaterial = new THREE.LineBasicMaterial({ color: 0x00aa00, linewidth: 2, depthTest: false });
+      if (lineMaterial) {
+        lineMaterial.onBeforeRender = function() {};
+      }
+      const line = new THREE.LineSegments(edges, lineMaterial);
+      line.onBeforeRender = function() {};
+      line.onAfterRender = function() {};
+      mesh.add(line);
 
       scene.add(mesh);
       this.viewer.viewer.Render();
@@ -494,6 +526,17 @@ export class ViewerManager {
       mesh.quaternion.copy(quaternion);
       mesh.position.copy(center);
 
+      // Add a wireframe outline to "illustrate planning"
+      const edges = new THREE.EdgesGeometry(geometry);
+      const lineMaterial = new THREE.LineBasicMaterial({ color: 0x0000aa, linewidth: 2, depthTest: false });
+      if (lineMaterial) {
+        lineMaterial.onBeforeRender = function() {};
+      }
+      const line = new THREE.LineSegments(edges, lineMaterial);
+      line.onBeforeRender = function() {};
+      line.onAfterRender = function() {};
+      mesh.add(line);
+
       scene.add(mesh);
       this.viewer.viewer.Render();
 
@@ -503,6 +546,7 @@ export class ViewerManager {
           mesh,
           radius,
           length,
+          baseDistance: distance,
           color: '#0000ff'
       });
   }

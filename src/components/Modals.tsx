@@ -212,13 +212,40 @@ export function Modals() {
               {loadedUrl && (
                 <>
                   {activeModal === 'share' && (
-                    <button 
-                      className="flex-1 max-w-[130px] h-10 px-3 rounded-sm text-xs font-bold uppercase tracking-widest bg-green-600 text-white hover:bg-green-700 border-none shadow-sm transition-colors flex items-center justify-center gap-1.5 text-center font-bold" 
-                      onClick={handleShareWhatsApp}
-                    >
-                      <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
-                      <span className="truncate">WhatsApp</span>
-                    </button>
+                      <button 
+                        className="flex-1 max-w-[130px] h-10 px-3 rounded-sm text-xs font-bold uppercase tracking-widest bg-green-600 text-white hover:bg-green-700 border-none shadow-sm transition-colors flex items-center justify-center gap-1.5 text-center font-bold" 
+                        onClick={async () => {
+                            let sharedOk = false;
+                            const shareText = 'Check out this 3D model: ' + shareVal;
+                            if (window._viewerManagerInstance) {
+                                try {
+                                    const dataUrl = window._viewerManagerInstance.captureSnapshot(1920, 1080, false);
+                                    if (dataUrl && navigator.canShare) {
+                                        const blob = dataURIToBlob(dataUrl);
+                                        const dlName = filename || 'snapshot';
+                                        const file = new File([blob], `${dlName.replace(/\\.[^/.]+$/, "")}_snapshot.png`, { type: 'image/png' });
+                                        if (navigator.canShare({ files: [file] })) {
+                                            await navigator.share({
+                                                title: '3D Model',
+                                                text: shareText,
+                                                files: [file]
+                                            });
+                                            sharedOk = true;
+                                        }
+                                    }
+                                } catch (e) {
+                                    console.warn('Share with image failed', e);
+                                }
+                            }
+                            if (!sharedOk) {
+                                const url = `https://wa.me/?text=${encodeURIComponent(shareText)}`;
+                                window.open(url, '_blank');
+                            }
+                        }}
+                      >
+                        <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
+                        <span className="truncate">WhatsApp</span>
+                      </button>
                   )}
                   <button 
                     className="flex-1 max-w-[130px] h-10 px-3 rounded-sm text-xs font-bold uppercase tracking-widest bg-blue-600 text-white hover:bg-blue-700 border-none shadow-sm transition-colors flex items-center justify-center text-center font-bold" 
@@ -285,12 +312,21 @@ export function Modals() {
                 Cancel
               </button>
               {!isEmpty && (
-                <button 
-                  className="h-10 px-6 rounded-sm text-xs font-bold uppercase tracking-widest bg-blue-600 text-white hover:bg-blue-700 border-none shadow-sm transition-colors font-bold flex items-center justify-center" 
-                  onClick={handleCreateSnapshot}
-                >
-                  Save Image
-                </button>
+                <div className="flex items-center gap-3">
+                  <button 
+                      className="h-10 px-5 rounded-sm text-xs font-bold uppercase tracking-widest bg-green-600 text-white hover:bg-green-700 border-none shadow-sm transition-colors flex items-center justify-center gap-2" 
+                      onClick={handleShareWhatsApp}
+                    >
+                      <svg viewBox="0 0 24 24" width="14" height="14" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" className="shrink-0"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
+                      <span>WhatsApp</span>
+                  </button>
+                  <button 
+                    className="h-10 px-6 rounded-sm text-xs font-bold uppercase tracking-widest bg-blue-600 text-white hover:bg-blue-700 border-none shadow-sm transition-colors font-bold flex items-center justify-center" 
+                    onClick={handleCreateSnapshot}
+                  >
+                    Save Image
+                  </button>
+                </div>
               )}
             </div>
           </>

@@ -35,7 +35,6 @@ export function Header({ toggleSidebar }: { toggleSidebar: () => void }) {
         <button className="w-8 h-8 rounded shrink-0 flex items-center justify-center transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-blue-600 dark:hover:text-blue-400" onClick={toggleSidebar} title="Toggle Sidebar">
           <Menu size={18} />
         </button>
-        <div className="w-[1px] h-5 bg-slate-200 dark:bg-slate-700 mx-2 hidden sm:block"></div>
         
         <button className="w-8 h-8 rounded shrink-0 flex items-center justify-center transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-blue-600 dark:hover:text-blue-400" onClick={handleOpenFiles} title="Open File(s)">
           <FolderOpen size={18} />
@@ -49,20 +48,6 @@ export function Header({ toggleSidebar }: { toggleSidebar: () => void }) {
         <button className="w-8 h-8 rounded shrink-0 flex items-center justify-center transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-blue-600 dark:hover:text-blue-400" onClick={() => setActiveModal('embed')} title="Embed HTML">
           <Code size={18} />
         </button>
-        
-        <div className="w-[1px] h-5 bg-slate-200 dark:bg-slate-700 mx-2 hidden sm:block"></div>
-
-        <button 
-          className={`hidden sm:flex w-8 h-8 rounded shrink-0 items-center justify-center transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-blue-600 dark:hover:text-blue-400 ${activeModal === 'planning' ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30' : ''}`} 
-          onClick={() => setActiveModal(activeModal === 'planning' ? null : 'planning')} 
-          title="3D Interaction Planning Tools"
-        >
-          <PenTool size={18} />
-        </button>
-        
-        <button className="w-8 h-8 rounded shrink-0 flex items-center justify-center transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-blue-600 dark:hover:text-blue-400" onClick={() => setActiveModal('snapshot')} title="Create Snapshot">
-          <Camera size={18} />
-        </button>
         <button 
           className={`w-8 h-8 rounded shrink-0 flex items-center justify-center transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-blue-600 dark:hover:text-blue-400 ${rulersVisible ? 'text-blue-600 dark:text-blue-400 bg-slate-100 dark:bg-slate-800' : ''}`} 
           onClick={toggleRulers} 
@@ -70,8 +55,19 @@ export function Header({ toggleSidebar }: { toggleSidebar: () => void }) {
         >
           <Ruler size={18} />
         </button>
+        <button className="w-8 h-8 rounded shrink-0 flex items-center justify-center transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-blue-600 dark:hover:text-blue-400" onClick={() => setActiveModal('snapshot')} title="Create Snapshot">
+          <Camera size={18} />
+        </button>
         <button className="w-8 h-8 rounded shrink-0 flex items-center justify-center transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-blue-600 dark:hover:text-blue-400" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} title="Toggle Dark Mode">
           {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+        </button>
+
+        <button 
+          className={`hidden sm:flex w-8 h-8 rounded shrink-0 items-center justify-center transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-blue-600 dark:hover:text-blue-400 ${activeModal === 'planning' ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/30' : ''}`} 
+          onClick={() => setActiveModal(activeModal === 'planning' ? null : 'planning')} 
+          title="3D Interaction Planning Tools"
+        >
+          <PenTool size={18} />
         </button>
       </div>
     </header>
