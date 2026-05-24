@@ -11,6 +11,7 @@ export interface ViewerManagerConfig {
   onMeshHighlighted: (id: number | null) => void;
   onPlanningObjectsChange?: (objects: any[]) => void;
   onPlanningPointsChange?: (count: number) => void;
+  onMeasurementChange?: (measurement: { distance: number, angle: number } | null) => void;
 }
 
 export class ViewerManager {
@@ -25,8 +26,9 @@ export class ViewerManager {
   treeParseInterval: any = null;
 
   // Planning Tools state
-  planningMode: 'none' | 'plane' | 'cylinder' = 'none';
+  planningMode: 'none' | 'plane' | 'cylinder' | 'measure' = 'none';
   planningPoints: any[] = [];
+  planningNormals: any[] = [];
   planningPointMarkers: any[] = [];
   planningObjects: any[] = [];
   nextPlanningObjectId: number = 1;
@@ -123,6 +125,14 @@ export class ViewerManager {
     } catch (error) {}
     if (this.viewer.viewer.scene) {
       try { this.viewer.viewer.Render(); } catch(e) {}
+    }
+  }
+
+  fitToWindow() {
+    if (this.viewer && typeof this.viewer.FitToWindow === 'function') {
+      this.viewer.FitToWindow();
+    } else if (this.viewer && this.viewer.viewer && typeof this.viewer.viewer.FitToWindow === 'function') {
+      this.viewer.viewer.FitToWindow();
     }
   }
 
@@ -309,7 +319,13 @@ export class ViewerManager {
             
             if (this.planningMode !== 'none') {
                  if (visibleHit) {
-                     this.addPlanningPoint(visibleHit.point);
+                     let normal = null;
+                     if (visibleHit.face && visibleHit.face.normal && window.THREE) {
+                         const THREE = window.THREE;
+                         normal = visibleHit.face.normal.clone();
+                         normal.transformDirection(visibleHit.object.matrixWorld);
+                     }
+                     this.addPlanningPoint(visibleHit.point, normal);
                  }
                  return;
             }
@@ -329,13 +345,17 @@ export class ViewerManager {
     });
   }
 
-  setPlanningMode(mode: 'none' | 'plane' | 'cylinder') {
+  setPlanningMode(mode: 'none' | 'plane' | 'cylinder' | 'measure') {
       this.planningMode = mode;
       this.clearPlanningPoints();
   }
 
   clearPlanningPoints() {
       this.planningPoints = [];
+      this.planningNormals = [];
+      if (this.config.onMeasurementChange) {
+          this.config.onMeasurementChange(null);
+      }
       if (this.viewer && this.viewer.viewer && window.THREE) {
           const scene = this.viewer.viewer.scene || this.viewer.viewer.mainScene;
           if (scene) {
@@ -355,7 +375,7 @@ export class ViewerManager {
       }
   }
 
-  addPlanningPoint(point: any) {
+  addPlanningPoint(point: any, normal?: any) {
       if (!window.THREE || !this.viewer || !this.viewer.viewer) return;
       const scene = this.viewer.viewer.scene || this.viewer.viewer.mainScene;
       if (!scene) return;
@@ -364,11 +384,18 @@ export class ViewerManager {
 
       if (this.planningMode === 'plane' && this.planningPoints.length >= 3) return;
       if (this.planningMode === 'cylinder' && this.planningPoints.length >= 2) return;
+      if (this.planningMode === 'measure' && this.planningPoints.length >= 2) return;
 
       this.planningPoints.push(point);
+      if (normal) {
+          this.planningNormals.push(normal);
+      } else {
+          this.planningNormals.push(new THREE.Vector3(0, 1, 0));
+      }
       
       const geometry = new THREE.SphereGeometry(2, 16, 16);
-      const material = new THREE.MeshBasicMaterial({ color: 0xff0000, depthTest: false });
+      const isMeasure = this.planningMode === 'measure';
+      const material = new THREE.MeshBasicMaterial({ color: isMeasure ? 0x10b981 : 0xff0000, depthTest: false });
       const marker = new THREE.Mesh(geometry, material);
       marker.onBeforeRender = function() {};
       marker.onAfterRender = function() {};
@@ -380,8 +407,27 @@ export class ViewerManager {
       scene.add(marker);
       this.planningPointMarkers.push(marker);
 
+      if (isMeasure && this.planningPoints.length === 2) {
+          const p1 = this.planningPoints[0];
+          const p2 = this.planningPoints[1];
+          const lineGeom = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+          const lineMat = new THREE.LineBasicMaterial({ color: 0x10b981, linewidth: 3, depthTest: false });
+          if (lineMat) {
+              lineMat.onBeforeRender = function() {};
+          }
+          const measureLine = new THREE.LineSegments(lineGeom, lineMat);
+          measureLine.onBeforeRender = function() {};
+          measureLine.onAfterRender = function() {};
+          measureLine.renderOrder = 999;
+          scene.add(measureLine);
+          this.planningPointMarkers.push(measureLine);
+      }
+
       if (this.config.onPlanningPointsChange) {
           this.config.onPlanningPointsChange(this.planningPoints.length);
+      }
+      if (this.config.onMeasurementChange) {
+          this.config.onMeasurementChange(this.calculateMeasurement());
       }
       this.viewer.viewer.Render();
   }
@@ -389,6 +435,7 @@ export class ViewerManager {
   undoPlanningPoint() {
       if (this.planningPoints.length > 0) {
           this.planningPoints.pop();
+          this.planningNormals.pop();
           const marker = this.planningPointMarkers.pop();
           if (marker) {
               const scene = this.viewer?.viewer?.scene || this.viewer?.viewer?.mainScene;
@@ -396,13 +443,44 @@ export class ViewerManager {
               if (marker.geometry) marker.geometry.dispose();
               if (marker.material) marker.material.dispose();
           }
+          // If measure mode line is also present, pop it too
+          if (this.planningMode === 'measure' && this.planningPointMarkers.length > 0) {
+              const lineMarker = this.planningPointMarkers.pop();
+              if (lineMarker) {
+                  const scene = this.viewer?.viewer?.scene || this.viewer?.viewer?.mainScene;
+                  if (scene) scene.remove(lineMarker);
+                  if (lineMarker.geometry) lineMarker.geometry.dispose();
+                  if (lineMarker.material) lineMarker.material.dispose();
+              }
+          }
+
           if (this.config.onPlanningPointsChange) {
               this.config.onPlanningPointsChange(this.planningPoints.length);
+          }
+          if (this.config.onMeasurementChange) {
+              this.config.onMeasurementChange(this.calculateMeasurement());
           }
           if (this.viewer && this.viewer.viewer) {
               this.viewer.viewer.Render();
           }
       }
+  }
+
+  calculateMeasurement() {
+      if (!window.THREE || this.planningPoints.length < 2) return null;
+      const p1 = this.planningPoints[0];
+      const p2 = this.planningPoints[1];
+      const distance = p1.distanceTo(p2);
+      
+      let angle = 0;
+      if (this.planningNormals.length >= 2) {
+          const n1 = this.planningNormals[0];
+          const n2 = this.planningNormals[1];
+          const dot = Math.min(Math.max(n1.dot(n2), -1.0), 1.0);
+          const angleRad = Math.acos(dot);
+          angle = angleRad * (180 / Math.PI);
+      }
+      return { distance, angle };
   }
 
   confirmPlanningObject(options: { planeExtWidth?: number, planeExtLength?: number, cylinderRadius?: number, cylinderExtension?: number } = {}) {
@@ -414,6 +492,14 @@ export class ViewerManager {
           }
       } else if (this.planningMode === 'cylinder' && this.planningPoints.length === 2) {
           this.createPlanningCylinder(this.planningPoints[0], this.planningPoints[1], options.cylinderRadius, options.cylinderExtension);
+          this.setPlanningMode('none');
+          if (this.config.onPlanningObjectsChange) {
+              this.config.onPlanningObjectsChange(this.planningObjects);
+          }
+      } else if (this.planningMode === 'measure' && this.planningPoints.length === 2) {
+          const m = this.calculateMeasurement();
+          const angle = m ? m.angle : 0;
+          this.createPlanningMeasurement(this.planningPoints[0], this.planningPoints[1], angle);
           this.setPlanningMode('none');
           if (this.config.onPlanningObjectsChange) {
               this.config.onPlanningObjectsChange(this.planningObjects);
@@ -548,6 +634,65 @@ export class ViewerManager {
           length,
           baseDistance: distance,
           color: '#0000ff'
+      });
+  }
+
+  createPlanningMeasurement(p1: any, p2: any, angle: number) {
+      if (!window.THREE || !this.viewer || !this.viewer.viewer) return;
+      const scene = this.viewer.viewer.scene || this.viewer.viewer.mainScene;
+      if (!scene) return;
+
+      const THREE = window.THREE;
+
+      const distance = p1.distanceTo(p2);
+      const center = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
+      const direction = new THREE.Vector3().subVectors(p2, p1).normalize();
+
+      const radius = 0.5; // Sleek 1mm diameter tube
+      const length = distance;
+
+      // CylinderGeometry is along Y axis by default
+      const geometry = new THREE.CylinderGeometry(radius, radius, length, 16);
+      const material = new THREE.MeshBasicMaterial({ 
+          color: 0x10b981, 
+          transparent: true, 
+          opacity: 0.8 
+      });
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.onBeforeRender = function() {};
+      mesh.onAfterRender = function() {};
+      if (material) {
+        material.onBeforeRender = function() {};
+      }
+
+      const up = new THREE.Vector3(0, 1, 0);
+      const quaternion = new THREE.Quaternion().setFromUnitVectors(up, direction);
+      mesh.quaternion.copy(quaternion);
+      mesh.position.copy(center);
+
+      // Add a line outline too
+      const edges = new THREE.EdgesGeometry(geometry);
+      const lineMaterial = new THREE.LineBasicMaterial({ color: 0x059669, linewidth: 2, depthTest: false });
+      if (lineMaterial) {
+        lineMaterial.onBeforeRender = function() {};
+      }
+      const line = new THREE.LineSegments(edges, lineMaterial);
+      line.onBeforeRender = function() {};
+      line.onAfterRender = function() {};
+      mesh.add(line);
+
+      scene.add(mesh);
+      this.viewer.viewer.Render();
+
+      this.planningObjects.push({
+          id: `Measurement_${this.nextPlanningObjectId++}`,
+          type: 'measurement',
+          mesh,
+          radius,
+          length,
+          baseDistance: distance,
+          angle: angle,
+          color: '#10b981'
       });
   }
 

@@ -1,13 +1,13 @@
 import { useViewer } from '../context/ViewerContext';
-import { X, SlidersHorizontal, Download, Trash2, Crosshair, BoxSelect } from 'lucide-react';
-import { useState } from 'react';
+import { X, SlidersHorizontal, Download, Trash2, Crosshair, BoxSelect, Ruler } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
 
 export function PlanningMenu() {
   const { 
     activeModal, setActiveModal, 
     planningMode, setPlanningMode, 
     planningObjects, planningPointsPicked,
-    viewerManager
+    viewerManager, measurement
   } = useViewer();
 
   // Settings
@@ -15,6 +15,27 @@ export function PlanningMenu() {
   const [planeExtLength, setPlaneExtLength] = useState(10);
   const [cylinderDiameter, setCylinderDiameter] = useState(1);
   const [cylinderExtension, setCylinderExtension] = useState(20);
+
+  const [settingsExpanded, setSettingsExpanded] = useState(true);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+        if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+            setSettingsExpanded(false);
+        }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside, { passive: true });
+    return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+        document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, []);
+
+  useEffect(() => {
+    setSettingsExpanded(true);
+  }, [planningMode]);
 
   if (activeModal !== 'planning') return null;
 
@@ -31,11 +52,11 @@ export function PlanningMenu() {
       viewerManager?.undoPlanningPoint();
   };
 
-  const canConfirm = (planningMode === 'plane' && planningPointsPicked === 3) || (planningMode === 'cylinder' && planningPointsPicked === 2);
+  const canConfirm = (planningMode === 'plane' && planningPointsPicked === 3) || (planningMode === 'cylinder' && planningPointsPicked === 2) || (planningMode === 'measure' && planningPointsPicked === 2);
 
   return (
-    <div className="absolute right-6 top-[80px] w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl flex flex-col z-50 overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900">
+    <div ref={menuRef} className="absolute right-6 top-[80px] w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl flex flex-col z-50 overflow-hidden">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900" onClick={() => setSettingsExpanded(true)}>
         <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100 uppercase tracking-widest flex items-center gap-2">
            Planning Tools
         </h3>
@@ -48,7 +69,7 @@ export function PlanningMenu() {
         <div className="flex flex-col gap-2">
             <div className={`flex flex-col rounded border transition-colors ${planningMode === 'plane' ? 'border-blue-500' : 'border-slate-200 dark:border-slate-700'}`}>
                 <button 
-                    onClick={() => setPlanningMode(planningMode === 'plane' ? 'none' : 'plane')}
+                    onClick={() => { setPlanningMode(planningMode === 'plane' ? 'none' : 'plane'); setSettingsExpanded(true); }}
                     className={`flex items-center p-3 text-xs font-semibold uppercase tracking-wider transition-colors w-full text-left ${
                         planningMode === 'plane' ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-t' : 'bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded'
                     }`}
@@ -66,16 +87,18 @@ export function PlanningMenu() {
                             Points picked: <strong>{planningPointsPicked}</strong> / 3
                         </div>
                         
-                        <div className="flex flex-col gap-2 border-t border-blue-200 dark:border-blue-800/30 pt-3">
-                            <label className="flex items-center justify-between text-[10px] uppercase font-bold tracking-wider">
-                                Ext. Width (mm)
-                                <input type="number" min="0" value={planeExtWidth} onChange={e => setPlaneExtWidth(parseFloat(e.target.value) || 0)} className="w-16 p-1 rounded text-center border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-900" />
-                            </label>
-                            <label className="flex items-center justify-between text-[10px] uppercase font-bold tracking-wider">
-                                Ext. Length (mm)
-                                <input type="number" min="0" value={planeExtLength} onChange={e => setPlaneExtLength(parseFloat(e.target.value) || 0)} className="w-16 p-1 rounded text-center border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-900" />
-                            </label>
-                        </div>
+                        {settingsExpanded && (
+                            <div className="flex flex-col gap-2 border-t border-blue-200 dark:border-blue-800/30 pt-3 mb-1">
+                                <label className="flex items-center justify-between text-[10px] uppercase font-bold tracking-wider">
+                                    Ext. Width (mm)
+                                    <input type="number" min="0" value={planeExtWidth} onChange={e => setPlaneExtWidth(parseFloat(e.target.value) || 0)} className="w-16 p-1 rounded text-center border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-900" />
+                                </label>
+                                <label className="flex items-center justify-between text-[10px] uppercase font-bold tracking-wider">
+                                    Ext. Length (mm)
+                                    <input type="number" min="0" value={planeExtLength} onChange={e => setPlaneExtLength(parseFloat(e.target.value) || 0)} className="w-16 p-1 rounded text-center border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-900" />
+                                </label>
+                            </div>
+                        )}
 
                         <div className="flex gap-2 mt-2">
                             <button onClick={handleUndo} disabled={planningPointsPicked === 0} className="flex-1 px-2 py-1.5 rounded bg-blue-200 dark:bg-blue-800/50 text-blue-800 dark:text-blue-300 font-bold transition hover:bg-blue-300 dark:hover:bg-blue-700/50 disabled:opacity-50 disabled:cursor-not-allowed">
@@ -91,7 +114,7 @@ export function PlanningMenu() {
 
             <div className={`flex flex-col rounded border transition-colors ${planningMode === 'cylinder' ? 'border-amber-500' : 'border-slate-200 dark:border-slate-700'}`}>
                 <button 
-                    onClick={() => setPlanningMode(planningMode === 'cylinder' ? 'none' : 'cylinder')}
+                    onClick={() => { setPlanningMode(planningMode === 'cylinder' ? 'none' : 'cylinder'); setSettingsExpanded(true); }}
                     className={`flex items-center p-3 text-xs font-semibold uppercase tracking-wider transition-colors w-full text-left ${
                         planningMode === 'cylinder' ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 rounded-t' : 'bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded'
                     }`}
@@ -109,16 +132,18 @@ export function PlanningMenu() {
                             Points picked: <strong>{planningPointsPicked}</strong> / 2
                         </div>
                         
-                        <div className="flex flex-col gap-2 border-t border-amber-200 dark:border-amber-800/30 pt-3">
-                            <label className="flex items-center justify-between text-[10px] uppercase font-bold tracking-wider">
-                                Diameter (mm)
-                                <input type="number" min="0.1" step="0.1" value={cylinderDiameter} onChange={e => setCylinderDiameter(parseFloat(e.target.value) || 1)} className="w-16 p-1 rounded text-center border border-amber-200 dark:border-amber-800 bg-white dark:bg-slate-900" />
-                            </label>
-                            <label className="flex items-center justify-between text-[10px] uppercase font-bold tracking-wider">
-                                Ext. Length (mm)
-                                <input type="number" min="0" value={cylinderExtension} onChange={e => setCylinderExtension(parseFloat(e.target.value) || 0)} className="w-16 p-1 rounded text-center border border-amber-200 dark:border-amber-800 bg-white dark:bg-slate-900" />
-                            </label>
-                        </div>
+                        {settingsExpanded && (
+                            <div className="flex flex-col gap-2 border-t border-amber-200 dark:border-amber-800/30 pt-3 mb-1">
+                                <label className="flex items-center justify-between text-[10px] uppercase font-bold tracking-wider">
+                                    Diameter (mm)
+                                    <input type="number" min="0.1" step="0.1" value={cylinderDiameter} onChange={e => setCylinderDiameter(parseFloat(e.target.value) || 1)} className="w-16 p-1 rounded text-center border border-amber-200 dark:border-amber-800 bg-white dark:bg-slate-900" />
+                                </label>
+                                <label className="flex items-center justify-between text-[10px] uppercase font-bold tracking-wider">
+                                    Ext. Length (mm)
+                                    <input type="number" min="0" value={cylinderExtension} onChange={e => setCylinderExtension(parseFloat(e.target.value) || 0)} className="w-16 p-1 rounded text-center border border-amber-200 dark:border-amber-800 bg-white dark:bg-slate-900" />
+                                </label>
+                            </div>
+                        )}
 
                         <div className="flex gap-2 mt-2">
                             <button onClick={handleUndo} disabled={planningPointsPicked === 0} className="flex-1 px-2 py-1.5 rounded bg-amber-200 dark:bg-amber-800/50 text-amber-800 dark:text-amber-300 font-bold transition hover:bg-amber-300 dark:hover:bg-amber-700/50 disabled:opacity-50 disabled:cursor-not-allowed">
@@ -126,6 +151,54 @@ export function PlanningMenu() {
                             </button>
                             <button onClick={handleConfirm} disabled={!canConfirm} className="flex-[2] flex items-center justify-center gap-1 px-2 py-1.5 rounded bg-amber-600 dark:bg-amber-500 text-white font-bold transition hover:bg-amber-700 dark:hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed">
                                 Add Cylinder
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            <div className={`flex flex-col rounded border transition-colors ${planningMode === 'measure' ? 'border-emerald-500 bg-emerald-50/5 dark:bg-emerald-950/5' : 'border-slate-200 dark:border-slate-700'}`}>
+                <button 
+                    onClick={() => { setPlanningMode(planningMode === 'measure' ? 'none' : 'measure'); setSettingsExpanded(true); }}
+                    className={`flex items-center p-3 text-xs font-semibold uppercase tracking-wider transition-colors w-full text-left ${
+                        planningMode === 'measure' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-t' : 'bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded'
+                    }`}
+                >
+                    <Ruler size={18} className="mr-3 shrink-0" />
+                    <div className="flex flex-col">
+                        <span>Measure Point-to-Point</span>
+                        <span className="text-[10px] font-normal opacity-70 normal-case tracking-normal mt-0.5">2 Points</span>
+                    </div>
+                </button>
+                {planningMode === 'measure' && (
+                    <div className="p-3 border-t border-emerald-200 dark:border-emerald-800/30 bg-emerald-50/50 dark:bg-emerald-900/10 text-xs text-emerald-800 dark:text-emerald-300 flex flex-col gap-3 rounded-b">
+                        <div className="text-center font-semibold mb-1">
+                            Click on the 3D model to select two points.<br/>
+                            Points picked: <strong>{planningPointsPicked}</strong> / 2
+                        </div>
+                        
+                        {measurement && (
+                            <div className="flex flex-col gap-2 border-t border-emerald-200 dark:border-emerald-800/30 pt-3 mb-1">
+                                <div className="flex items-center justify-between font-mono py-1">
+                                    <span className="uppercase text-[10px] font-bold text-slate-400">Distance</span>
+                                    <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{measurement.distance.toFixed(2)} mm</span>
+                                </div>
+                                <div className="flex items-center justify-between font-mono py-1">
+                                    <span className="uppercase text-[10px] font-bold text-slate-400">Normal Angle</span>
+                                    <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{measurement.angle.toFixed(1)}°</span>
+                                </div>
+                            </div>
+                        )}
+
+                        <div className="flex gap-2 mt-2">
+                            <button onClick={handleUndo} disabled={planningPointsPicked === 0} className="flex-1 px-2 py-1.5 rounded bg-emerald-200 dark:bg-emerald-800/50 text-emerald-800 dark:text-emerald-300 font-bold transition hover:bg-emerald-300 dark:hover:bg-emerald-700/50 disabled:opacity-50 disabled:cursor-not-allowed text-center">
+                                Undo
+                            </button>
+                            <button onClick={handleConfirm} disabled={!canConfirm} className="flex-[2] flex items-center justify-center gap-1 px-2 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition disabled:opacity-50 disabled:cursor-not-allowed">
+                                Save
+                            </button>
+                            <button onClick={() => setPlanningMode('none')} className="flex-1 px-2 py-1.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold transition hover:bg-slate-300 dark:hover:bg-slate-600">
+                                Cancel
                             </button>
                         </div>
                     </div>
@@ -199,6 +272,9 @@ function PlanningObjectItem({ obj, viewerManager, index }: { obj: any, viewerMan
                   )}
                   {obj.type === 'plane' && obj.width !== undefined && obj.height !== undefined && (
                       <span className="text-[9px] text-slate-500 font-mono">{obj.width.toFixed(1)} × {obj.height.toFixed(1)} mm</span>
+                  )}
+                  {obj.type === 'measurement' && obj.baseDistance !== undefined && (
+                      <span className="text-[9px] text-slate-500 font-mono">Dist: {obj.baseDistance.toFixed(2)} mm | Angle: {(obj.angle || 0).toFixed(1)}°</span>
                   )}
                 </div>
               </div>
