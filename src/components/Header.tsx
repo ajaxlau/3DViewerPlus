@@ -1,4 +1,4 @@
-import { Menu, FolderOpen, Link, Share2, Code, Camera, Ruler, Moon, Sun, Wrench } from 'lucide-react';
+import { Menu, FolderOpen, Link, Share2, Code, Camera, Ruler, Moon, Sun, PenTool } from 'lucide-react';
 import { useViewer } from '../context/ViewerContext';
 
 export function Header({ toggleSidebar }: { toggleSidebar: () => void }) {
@@ -57,7 +57,7 @@ export function Header({ toggleSidebar }: { toggleSidebar: () => void }) {
           onClick={() => setActiveModal(activeModal === 'planning' ? null : 'planning')} 
           title="3D Interaction Planning Tools"
         >
-          <Wrench size={18} />
+          <PenTool size={18} />
         </button>
         
         <button className="w-8 h-8 rounded shrink-0 flex items-center justify-center transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-blue-600 dark:hover:text-blue-400" onClick={() => setActiveModal('snapshot')} title="Create Snapshot">

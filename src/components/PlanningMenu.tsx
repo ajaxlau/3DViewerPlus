@@ -14,6 +14,7 @@ export function PlanningMenu() {
   const [planeWidth, setPlaneWidth] = useState(100);
   const [planeLength, setPlaneLength] = useState(100);
   const [cylinderDiameter, setCylinderDiameter] = useState(1);
+  const [cylinderExtension, setCylinderExtension] = useState(20);
 
   if (activeModal !== 'planning') return null;
 
@@ -21,7 +22,8 @@ export function PlanningMenu() {
       viewerManager?.confirmPlanningObject({
           planeWidth,
           planeHeight: planeLength,
-          cylinderRadius: cylinderDiameter / 2
+          cylinderRadius: cylinderDiameter / 2,
+          cylinderExtension: cylinderExtension
       });
   };
 
@@ -87,10 +89,14 @@ export function PlanningMenu() {
                     </div>
                 )}
                 {planningMode === 'cylinder' && (
-                    <div className="flex gap-2 items-center justify-center border-t border-amber-200 dark:border-amber-800/30 pt-2">
-                        <label className="flex items-center gap-2 text-[10px] uppercase font-bold tracking-wider">
+                    <div className="flex flex-col gap-2 border-t border-amber-200 dark:border-amber-800/30 pt-2">
+                        <label className="flex items-center justify-between text-[10px] uppercase font-bold tracking-wider">
                             Diameter (mm)
-                            <input type="number" min="0.1" step="0.1" value={cylinderDiameter} onChange={e => setCylinderDiameter(parseFloat(e.target.value) || 1)} className="w-16 p-1 rounded text-center border-none" />
+                            <input type="number" min="0.1" step="0.1" value={cylinderDiameter} onChange={e => setCylinderDiameter(parseFloat(e.target.value) || 1)} className="w-16 p-1 rounded text-center border-none bg-white dark:bg-slate-900" />
+                        </label>
+                        <label className="flex items-center justify-between text-[10px] uppercase font-bold tracking-wider">
+                            Ext. Length (mm)
+                            <input type="number" min="0" value={cylinderExtension} onChange={e => setCylinderExtension(parseFloat(e.target.value) || 0)} className="w-16 p-1 rounded text-center border-none bg-white dark:bg-slate-900" />
                         </label>
                     </div>
                 )}
@@ -110,7 +116,15 @@ export function PlanningMenu() {
         )}
 
         <div className="border-t border-slate-200 dark:border-slate-800 pt-4 mt-2">
-            <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">Created Objects</h4>
+            <div className="flex items-center justify-between mb-3">
+                <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Created Objects</h4>
+                {planningObjects.length > 0 && (
+                    <button onClick={() => viewerManager?.exportAllPlanningObjectsZip()} className="text-[10px] flex items-center gap-1 font-bold text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 uppercase tracking-wider transition">
+                        <Download size={12} />
+                        Zip All
+                    </button>
+                )}
+            </div>
             
             {planningObjects.length === 0 && (
                 <div className="text-center text-xs text-slate-500 py-4 opacity-70">

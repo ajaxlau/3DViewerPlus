@@ -396,7 +396,7 @@ export class ViewerManager {
       }
   }
 
-  confirmPlanningObject(options: { planeWidth?: number, planeHeight?: number, cylinderRadius?: number } = {}) {
+  confirmPlanningObject(options: { planeWidth?: number, planeHeight?: number, cylinderRadius?: number, cylinderExtension?: number } = {}) {
       if (this.planningMode === 'plane' && this.planningPoints.length === 3) {
           this.createPlanningPlane(this.planningPoints[0], this.planningPoints[1], this.planningPoints[2], options.planeWidth, options.planeHeight);
           this.setPlanningMode('none');
@@ -404,7 +404,7 @@ export class ViewerManager {
               this.config.onPlanningObjectsChange(this.planningObjects);
           }
       } else if (this.planningMode === 'cylinder' && this.planningPoints.length === 2) {
-          this.createPlanningCylinder(this.planningPoints[0], this.planningPoints[1], options.cylinderRadius);
+          this.createPlanningCylinder(this.planningPoints[0], this.planningPoints[1], options.cylinderRadius, options.cylinderExtension);
           this.setPlanningMode('none');
           if (this.config.onPlanningObjectsChange) {
               this.config.onPlanningObjectsChange(this.planningObjects);
@@ -460,7 +460,7 @@ export class ViewerManager {
       });
   }
 
-  createPlanningCylinder(p1: any, p2: any, customRadius?: number) {
+  createPlanningCylinder(p1: any, p2: any, customRadius?: number, customExtension?: number) {
       if (!window.THREE || !this.viewer || !this.viewer.viewer) return;
       const scene = this.viewer.viewer.scene || this.viewer.viewer.mainScene;
       if (!scene) return;
@@ -472,7 +472,8 @@ export class ViewerManager {
       const direction = new THREE.Vector3().subVectors(p2, p1).normalize();
 
       const radius = customRadius || 0.5; // Default diameter 1mm => radius 0.5
-      const length = distance;
+      const extension = customExtension !== undefined ? customExtension : 20; // 20mm default extension
+      const length = distance + (extension * 2);
 
       // CylinderGeometry is along Y axis by default
       const geometry = new THREE.CylinderGeometry(radius, radius, length, 32);
@@ -549,14 +550,12 @@ export class ViewerManager {
       }
   }
 
-  exportPlanningObjectSTL(id: string) {
-      const obj = this.planningObjects.find(o => o.id === id);
-      if (!obj || !window.THREE) return;
+  generateSTLString(obj: any): string | null {
+      if (!window.THREE) return null;
       const THREE = window.THREE;
-      
       const mesh = obj.mesh;
       const geometry = mesh.geometry;
-      if (!geometry.isBufferGeometry) return;
+      if (!geometry.isBufferGeometry) return null;
       
       const cloneGeo = geometry.clone();
       cloneGeo.applyMatrix4(mesh.matrixWorld);
@@ -601,12 +600,43 @@ export class ViewerManager {
       }
       
       stl += `endsolid ${obj.id}\n`;
+      return stl;
+  }
+
+  exportPlanningObjectSTL(id: string) {
+      const obj = this.planningObjects.find(o => o.id === id);
+      if (!obj) return;
+      const stl = this.generateSTLString(obj);
+      if (!stl) return;
 
       const blob = new Blob([stl], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
       link.download = `${obj.id}.stl`;
+      link.click();
+      URL.revokeObjectURL(url);
+  }
+
+  async exportAllPlanningObjectsZip() {
+      if (this.planningObjects.length === 0) return;
+      
+      // dynamically import jszip to avoid server crashing on load? It's client side so we can import JSZip
+      const JSZip = (await import('jszip')).default;
+      const zip = new JSZip();
+
+      this.planningObjects.forEach(obj => {
+          const stl = this.generateSTLString(obj);
+          if (stl) {
+              zip.file(`${obj.id}.stl`, stl);
+          }
+      });
+
+      const blob = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'planning_objects.zip';
       link.click();
       URL.revokeObjectURL(url);
   }
