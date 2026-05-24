@@ -219,7 +219,7 @@ export function PlanningMenu() {
                         </button>
                         <button onClick={() => viewerManager?.exportAllPlanningObjectsZip()} className="text-[10px] flex items-center gap-1 font-bold text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 uppercase tracking-wider transition">
                             <Download size={12} />
-                            Zip All
+                            Export All
                         </button>
                     </div>
                 )}

@@ -889,13 +889,24 @@ export class ViewerManager {
       // dynamically import jszip to avoid server crashing on load? It's client side so we can import JSZip
       const JSZip = (await import('jszip')).default;
       const zip = new JSZip();
+      const metadataList: any[] = [];
 
       this.planningObjects.forEach(obj => {
           const stl = this.generateSTLString(obj);
           if (stl) {
               zip.file(`${obj.id}.stl`, stl);
+              metadataList.push({
+                  id: obj.id,
+                  type: obj.type,
+                  color: obj.color,
+                  baseDistance: obj.baseDistance,
+                  angle: obj.angle,
+                  annotation: obj.annotation
+              });
           }
       });
+      
+      zip.file('metadata.json', JSON.stringify(metadataList, null, 2));
 
       const blob = await zip.generateAsync({ type: 'blob' });
       const url = URL.createObjectURL(blob);
