@@ -9,6 +9,8 @@ export interface ViewerManagerConfig {
   onStatusChange: (status: string, isEmpty: boolean, filename?: string, url?: string | null) => void;
   onMeshesChange: (meshes: { id: number, name: string, visible: boolean, opacity: number }[]) => void;
   onMeshHighlighted: (id: number | null) => void;
+  onPlanningObjectsChange?: (objects: any[]) => void;
+  onPlanningPointsChange?: (count: number) => void;
 }
 
 export class ViewerManager {
@@ -18,9 +20,16 @@ export class ViewerManager {
 
   currentMeshes: any[] = [];
   theme: 'light' | 'dark' = 'light';
-  originalColors: Map<any, number> = new Map();
+  originalColors: Map<any, any> = new Map();
   highlightedMesh: any = null;
   treeParseInterval: any = null;
+
+  // Planning Tools state
+  planningMode: 'none' | 'plane' | 'cylinder' = 'none';
+  planningPoints: any[] = [];
+  planningPointMarkers: any[] = [];
+  planningObjects: any[] = [];
+  nextPlanningObjectId: number = 1;
 
   // Clipping state
   modelBBox: any = null;
@@ -289,6 +298,13 @@ export class ViewerManager {
             const intersects = raycaster.intersectObjects(this.currentMeshes, false);
             const visibleHit = intersects.find((hit: any) => hit.object.visible);
             
+            if (this.planningMode !== 'none') {
+                 if (visibleHit) {
+                     this.addPlanningPoint(visibleHit.point);
+                 }
+                 return;
+            }
+
             if (visibleHit) {
                 const hitMesh = visibleHit.object;
                 const idx = this.currentMeshes.indexOf(hitMesh);
@@ -304,6 +320,297 @@ export class ViewerManager {
     });
   }
 
+  setPlanningMode(mode: 'none' | 'plane' | 'cylinder') {
+      this.planningMode = mode;
+      this.clearPlanningPoints();
+  }
+
+  clearPlanningPoints() {
+      this.planningPoints = [];
+      if (this.viewer && this.viewer.viewer && window.THREE) {
+          const scene = this.viewer.viewer.scene || this.viewer.viewer.mainScene;
+          if (scene) {
+              this.planningPointMarkers.forEach(marker => {
+                  scene.remove(marker);
+                  if (marker.geometry) marker.geometry.dispose();
+                  if (marker.material) marker.material.dispose();
+              });
+          }
+      }
+      this.planningPointMarkers = [];
+      if (this.config.onPlanningPointsChange) {
+          this.config.onPlanningPointsChange(0);
+      }
+      if (this.viewer && this.viewer.viewer) {
+          this.viewer.viewer.Render();
+      }
+  }
+
+  addPlanningPoint(point: any) {
+      if (!window.THREE || !this.viewer || !this.viewer.viewer) return;
+      const scene = this.viewer.viewer.scene || this.viewer.viewer.mainScene;
+      if (!scene) return;
+      
+      const THREE = window.THREE;
+
+      if (this.planningMode === 'plane' && this.planningPoints.length >= 3) return;
+      if (this.planningMode === 'cylinder' && this.planningPoints.length >= 2) return;
+
+      this.planningPoints.push(point);
+      
+      const geometry = new THREE.SphereGeometry(2, 16, 16);
+      const material = new THREE.MeshBasicMaterial({ color: 0xff0000, depthTest: false });
+      const marker = new THREE.Mesh(geometry, material);
+      marker.onBeforeRender = function() {};
+      marker.onAfterRender = function() {};
+      if (material) {
+        material.onBeforeRender = function() {};
+      }
+      marker.position.copy(point);
+      marker.renderOrder = 999; 
+      scene.add(marker);
+      this.planningPointMarkers.push(marker);
+
+      if (this.config.onPlanningPointsChange) {
+          this.config.onPlanningPointsChange(this.planningPoints.length);
+      }
+      this.viewer.viewer.Render();
+  }
+
+  undoPlanningPoint() {
+      if (this.planningPoints.length > 0) {
+          this.planningPoints.pop();
+          const marker = this.planningPointMarkers.pop();
+          if (marker) {
+              const scene = this.viewer?.viewer?.scene || this.viewer?.viewer?.mainScene;
+              if (scene) scene.remove(marker);
+              if (marker.geometry) marker.geometry.dispose();
+              if (marker.material) marker.material.dispose();
+          }
+          if (this.config.onPlanningPointsChange) {
+              this.config.onPlanningPointsChange(this.planningPoints.length);
+          }
+          if (this.viewer && this.viewer.viewer) {
+              this.viewer.viewer.Render();
+          }
+      }
+  }
+
+  confirmPlanningObject(options: { planeWidth?: number, planeHeight?: number, cylinderRadius?: number } = {}) {
+      if (this.planningMode === 'plane' && this.planningPoints.length === 3) {
+          this.createPlanningPlane(this.planningPoints[0], this.planningPoints[1], this.planningPoints[2], options.planeWidth, options.planeHeight);
+          this.setPlanningMode('none');
+          if (this.config.onPlanningObjectsChange) {
+              this.config.onPlanningObjectsChange(this.planningObjects);
+          }
+      } else if (this.planningMode === 'cylinder' && this.planningPoints.length === 2) {
+          this.createPlanningCylinder(this.planningPoints[0], this.planningPoints[1], options.cylinderRadius);
+          this.setPlanningMode('none');
+          if (this.config.onPlanningObjectsChange) {
+              this.config.onPlanningObjectsChange(this.planningObjects);
+          }
+      }
+  }
+
+  createPlanningPlane(p1: any, p2: any, p3: any, customWidth?: number, customHeight?: number) {
+      if (!window.THREE || !this.viewer || !this.viewer.viewer) return;
+      const scene = this.viewer.viewer.scene || this.viewer.viewer.mainScene;
+      if (!scene) return;
+
+      const THREE = window.THREE;
+      
+      const center = new THREE.Vector3().addVectors(p1, p2).add(p3).divideScalar(3);
+      const v1 = new THREE.Vector3().subVectors(p2, p1);
+      const v2 = new THREE.Vector3().subVectors(p3, p1);
+      const normal = new THREE.Vector3().crossVectors(v1, v2).normalize();
+      
+      const width = customWidth || 100;
+      const height = customHeight || 100;
+
+      const geometry = new THREE.PlaneGeometry(width, height);
+      const material = new THREE.MeshBasicMaterial({ 
+          color: 0x00ff00, 
+          side: THREE.DoubleSide, 
+          transparent: true, 
+          opacity: 0.5 
+      });
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.onBeforeRender = function() {};
+      mesh.onAfterRender = function() {};
+      if (material) {
+        material.onBeforeRender = function() {};
+      }
+      
+      // Orient the plane
+      const testNormal = new THREE.Vector3(0, 0, 1);
+      const quaternion = new THREE.Quaternion().setFromUnitVectors(testNormal, normal);
+      mesh.quaternion.copy(quaternion);
+      mesh.position.copy(center);
+
+      scene.add(mesh);
+      this.viewer.viewer.Render();
+
+      this.planningObjects.push({
+          id: `Plane_${this.nextPlanningObjectId++}`,
+          type: 'plane',
+          mesh,
+          width,
+          height,
+          color: '#00ff00'
+      });
+  }
+
+  createPlanningCylinder(p1: any, p2: any, customRadius?: number) {
+      if (!window.THREE || !this.viewer || !this.viewer.viewer) return;
+      const scene = this.viewer.viewer.scene || this.viewer.viewer.mainScene;
+      if (!scene) return;
+
+      const THREE = window.THREE;
+
+      const distance = p1.distanceTo(p2);
+      const center = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
+      const direction = new THREE.Vector3().subVectors(p2, p1).normalize();
+
+      const radius = customRadius || 0.5; // Default diameter 1mm => radius 0.5
+      const length = distance;
+
+      // CylinderGeometry is along Y axis by default
+      const geometry = new THREE.CylinderGeometry(radius, radius, length, 32);
+      const material = new THREE.MeshBasicMaterial({ 
+          color: 0x0000ff, 
+          transparent: true, 
+          opacity: 0.5 
+      });
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.onBeforeRender = function() {};
+      mesh.onAfterRender = function() {};
+      if (material) {
+        material.onBeforeRender = function() {};
+      }
+
+      const up = new THREE.Vector3(0, 1, 0);
+      const quaternion = new THREE.Quaternion().setFromUnitVectors(up, direction);
+      mesh.quaternion.copy(quaternion);
+      mesh.position.copy(center);
+
+      scene.add(mesh);
+      this.viewer.viewer.Render();
+
+      this.planningObjects.push({
+          id: `Cylinder_${this.nextPlanningObjectId++}`,
+          type: 'cylinder',
+          mesh,
+          radius,
+          length,
+          color: '#0000ff'
+      });
+  }
+
+  updatePlanningObjectTransform(id: string, updates: { posX?: number, posY?: number, posZ?: number, rotX?: number, rotY?: number, rotZ?: number }) {
+      if (!window.THREE) return;
+      const THREE = window.THREE;
+      const obj = this.planningObjects.find(o => o.id === id);
+      if (!obj) return;
+      
+      if (updates.posX !== undefined) obj.mesh.position.x = updates.posX;
+      if (updates.posY !== undefined) obj.mesh.position.y = updates.posY;
+      if (updates.posZ !== undefined) obj.mesh.position.z = updates.posZ;
+
+      if (updates.rotX !== undefined || updates.rotY !== undefined || updates.rotZ !== undefined) {
+          const rx = updates.rotX !== undefined ? THREE.MathUtils.degToRad(updates.rotX) : obj.mesh.rotation.x;
+          const ry = updates.rotY !== undefined ? THREE.MathUtils.degToRad(updates.rotY) : obj.mesh.rotation.y;
+          const rz = updates.rotZ !== undefined ? THREE.MathUtils.degToRad(updates.rotZ) : obj.mesh.rotation.z;
+          obj.mesh.rotation.set(rx, ry, rz);
+      }
+
+      this.viewer.viewer.Render();
+      if (this.config.onPlanningObjectsChange) {
+          this.config.onPlanningObjectsChange(this.planningObjects);
+      }
+  }
+
+  removePlanningObject(id: string) {
+      const idx = this.planningObjects.findIndex(o => o.id === id);
+      if (idx > -1) {
+          const obj = this.planningObjects[idx];
+          if (this.viewer && this.viewer.viewer) {
+             const scene = this.viewer.viewer.scene || this.viewer.viewer.mainScene;
+             if (scene) {
+                 scene.remove(obj.mesh);
+                 if (obj.mesh.geometry) obj.mesh.geometry.dispose();
+                 if (obj.mesh.material) obj.mesh.material.dispose();
+                 this.viewer.viewer.Render();
+             }
+          }
+          this.planningObjects.splice(idx, 1);
+          if (this.config.onPlanningObjectsChange) {
+              this.config.onPlanningObjectsChange(this.planningObjects);
+          }
+      }
+  }
+
+  exportPlanningObjectSTL(id: string) {
+      const obj = this.planningObjects.find(o => o.id === id);
+      if (!obj || !window.THREE) return;
+      const THREE = window.THREE;
+      
+      const mesh = obj.mesh;
+      const geometry = mesh.geometry;
+      if (!geometry.isBufferGeometry) return;
+      
+      const cloneGeo = geometry.clone();
+      cloneGeo.applyMatrix4(mesh.matrixWorld);
+
+      let stl = `solid ${obj.id}\n`;
+
+      const positionAttr = cloneGeo.getAttribute('position');
+      const indexAttr = cloneGeo.getIndex();
+      
+      const vA = new THREE.Vector3();
+      const vB = new THREE.Vector3();
+      const vC = new THREE.Vector3();
+      const cb = new THREE.Vector3();
+      const ab = new THREE.Vector3();
+
+      const addFacet = (a: number, b: number, c: number) => {
+          vA.fromBufferAttribute(positionAttr, a);
+          vB.fromBufferAttribute(positionAttr, b);
+          vC.fromBufferAttribute(positionAttr, c);
+
+          cb.subVectors(vC, vB);
+          ab.subVectors(vA, vB);
+          cb.cross(ab).normalize();
+
+          stl += `  facet normal ${cb.x} ${cb.y} ${cb.z}\n`;
+          stl += `    outer loop\n`;
+          stl += `      vertex ${vA.x} ${vA.y} ${vA.z}\n`;
+          stl += `      vertex ${vB.x} ${vB.y} ${vB.z}\n`;
+          stl += `      vertex ${vC.x} ${vC.y} ${vC.z}\n`;
+          stl += `    endloop\n`;
+          stl += `  endfacet\n`;
+      };
+
+      if (indexAttr) {
+          for (let i = 0; i < indexAttr.count; i += 3) {
+              addFacet(indexAttr.getX(i), indexAttr.getX(i+1), indexAttr.getX(i+2));
+          }
+      } else {
+          for (let i = 0; i < positionAttr.count; i += 3) {
+              addFacet(i, i+1, i+2);
+          }
+      }
+      
+      stl += `endsolid ${obj.id}\n`;
+
+      const blob = new Blob([stl], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${obj.id}.stl`;
+      link.click();
+      URL.revokeObjectURL(url);
+  }
+
   highlightMesh(id: number | null) {
     this.clearHighlight();
     if (id !== null && this.currentMeshes[id]) {
@@ -313,9 +620,48 @@ export class ViewerManager {
             const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
             materials.forEach((mat: any) => {
                 if (!this.originalColors.has(mat)) {
-                    this.originalColors.set(mat, mat.color.getHex());
+                    this.originalColors.set(mat, {
+                        color: mat.color ? mat.color.getHex() : 0xcccccc,
+                        roughness: mat.roughness !== undefined ? mat.roughness : null,
+                        metalness: mat.metalness !== undefined ? mat.metalness : null,
+                        shininess: mat.shininess !== undefined ? mat.shininess : null,
+                        specular: mat.specular !== undefined && mat.specular.getHex ? mat.specular.getHex() : null,
+                        vertexColors: mat.vertexColors !== undefined ? mat.vertexColors : null,
+                        map: mat.map !== undefined ? mat.map : null,
+                        emissive: (mat.emissive !== undefined && mat.emissive.getHex) ? mat.emissive.getHex() : null,
+                    });
                 }
-                mat.color.setHex(0xadd8e6); // Highlight color
+                
+                // Set the beautiful reflective light blue color from the reference
+                if (mat.color) {
+                    mat.color.setHex(0xaed8f2);
+                }
+                
+                // Disable vertex coloring and textures temporarily so the color is exact and not mixed
+                if (mat.vertexColors !== undefined) {
+                    mat.vertexColors = typeof mat.vertexColors === 'number' ? 0 : false;
+                }
+                if (mat.map !== undefined) {
+                    mat.map = null;
+                }
+                if (mat.emissive !== undefined && mat.emissive.setHex) {
+                    mat.emissive.setHex(0x000000);
+                }
+                
+                // Enhance reflectivity and shine
+                if (mat.roughness !== undefined) {
+                    mat.roughness = 0.11; // smooth reflective surface
+                }
+                if (mat.metalness !== undefined) {
+                    mat.metalness = 0.18; // elegant slight metallic reflection
+                }
+                if (mat.shininess !== undefined) {
+                    mat.shininess = 80; // high gloss for Phong material
+                }
+                if (mat.specular !== undefined && mat.specular.setHex) {
+                    mat.specular.setHex(0xffffff); // pure white specular reflecting light
+                }
+                
                 mat.needsUpdate = true;
             });
         }
@@ -331,7 +677,33 @@ export class ViewerManager {
           const materials = Array.isArray(this.highlightedMesh.material) ? this.highlightedMesh.material : [this.highlightedMesh.material];
           materials.forEach((mat: any) => {
               if (this.originalColors.has(mat)) {
-                  mat.color.setHex(this.originalColors.get(mat));
+                  const orig = this.originalColors.get(mat);
+                  if (orig) {
+                      if (mat.color) {
+                          mat.color.setHex(orig.color);
+                      }
+                      if (orig.roughness !== null && mat.roughness !== undefined) {
+                          mat.roughness = orig.roughness;
+                       }
+                      if (orig.metalness !== null && mat.metalness !== undefined) {
+                          mat.metalness = orig.metalness;
+                       }
+                      if (orig.shininess !== null && mat.shininess !== undefined) {
+                          mat.shininess = orig.shininess;
+                       }
+                      if (orig.specular !== null && mat.specular !== undefined && mat.specular.setHex) {
+                          mat.specular.setHex(orig.specular);
+                       }
+                      if (orig.vertexColors !== null && mat.vertexColors !== undefined) {
+                          mat.vertexColors = orig.vertexColors;
+                       }
+                      if (orig.map !== null && mat.map !== undefined) {
+                          mat.map = orig.map;
+                       }
+                      if (orig.emissive !== null && mat.emissive !== undefined && mat.emissive.setHex) {
+                          mat.emissive.setHex(orig.emissive);
+                       }
+                  }
               }
               mat.needsUpdate = true;
           });

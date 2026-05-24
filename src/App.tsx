@@ -4,6 +4,7 @@ import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { ViewerCanvas } from './components/ViewerCanvas';
 import { Modals } from './components/Modals';
+import { PlanningMenu } from './components/PlanningMenu';
 
 // Add the global reference for easy hacky access in simple DOM events (like file inputs)
 declare global {
@@ -64,6 +65,7 @@ function MainLayout() {
         </div>
       </div>
       <Modals />
+      <PlanningMenu />
     </div>
   );
 }

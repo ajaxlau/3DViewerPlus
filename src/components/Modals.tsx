@@ -156,7 +156,7 @@ export function Modals() {
     setActiveModal(null);
   };
 
-  if (!activeModal) return null;
+  if (!activeModal || activeModal === 'planning') return null;
 
   return (
     <div className="fixed inset-0 bg-slate-900/60 z-[1000] flex items-center justify-center fade-in p-4">

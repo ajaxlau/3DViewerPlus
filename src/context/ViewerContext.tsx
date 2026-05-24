@@ -44,8 +44,15 @@ interface ViewerContextState {
   toggleRulers: () => void;
   
   // Modals state
-  activeModal: 'url' | 'share' | 'embed' | 'snapshot' | null;
-  setActiveModal: (modal: 'url' | 'share' | 'embed' | 'snapshot' | null) => void;
+  activeModal: 'url' | 'share' | 'embed' | 'snapshot' | 'planning' | null;
+  setActiveModal: (modal: 'url' | 'share' | 'embed' | 'snapshot' | 'planning' | null) => void;
+
+  // Planning Tools
+  planningMode: 'none' | 'plane' | 'cylinder';
+  setPlanningMode: (mode: 'none' | 'plane' | 'cylinder') => void;
+  planningObjects: any[];
+  setPlanningObjects: (objects: any[]) => void;
+  planningPointsPicked: number;
 
   setContainerRef: (ref: HTMLElement | null) => void;
   setRulerRefs: (topRef?: HTMLCanvasElement | null, leftRef?: HTMLCanvasElement | null) => void;
@@ -74,6 +81,18 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
   const [rulersVisible, setRulersVisible] = useState(false);
   
   const [activeModal, setActiveModal] = useState<ViewerContextState['activeModal']>(null);
+  
+  // Planning Tools state
+  const [planningMode, setPlanningModeState] = useState<'none' | 'plane' | 'cylinder'>('none');
+  const [planningObjects, setPlanningObjects] = useState<any[]>([]);
+  const [planningPointsPicked, setPlanningPointsPicked] = useState(0);
+
+  const setPlanningMode = (mode: 'none' | 'plane' | 'cylinder') => {
+    setPlanningModeState(mode);
+    if (viewerManager) {
+      viewerManager.setPlanningMode(mode);
+    }
+  };
 
   const containerRef = useRef<HTMLElement | null>(null);
   const topRulerRef = useRef<HTMLCanvasElement | null>(null);
@@ -108,7 +127,9 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
           if (url !== undefined) setLoadedUrl(url);
         },
         onMeshesChange: (newMeshes) => setMeshes(newMeshes),
-        onMeshHighlighted: (id) => setHighlightedMeshId(id)
+        onMeshHighlighted: (id) => setHighlightedMeshId(id),
+        onPlanningObjectsChange: (objects) => setPlanningObjects([...objects]),
+        onPlanningPointsChange: (count) => setPlanningPointsPicked(count)
       });
       const isDark = document.documentElement.classList.contains('dark') || 
                     (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -193,6 +214,7 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
       clipPlanes, updateClipPlane, explodeValue, setExplodeValue,
       toggleMeshVisibility, setMeshOpacity, highlightMesh, highlightedMeshId,
       rulersVisible, toggleRulers, activeModal, setActiveModal,
+      planningMode, setPlanningMode, planningObjects, setPlanningObjects, planningPointsPicked,
       setContainerRef, setRulerRefs
     }}>
       {children}
