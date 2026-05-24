@@ -172,8 +172,9 @@ export function PlanningMenu() {
                 </button>
                 {planningMode === 'measure' && (
                     <div className="p-3 border-t border-emerald-200 dark:border-emerald-800/30 bg-emerald-50/50 dark:bg-emerald-900/10 text-xs text-emerald-800 dark:text-emerald-300 flex flex-col gap-3 rounded-b">
-                        <div className="text-center font-semibold mb-1">
+                        <div className="text-center mb-1 leading-normal">
                             Click on the 3D model to select two points.<br/>
+                            <span className="font-semibold text-emerald-600 dark:text-emerald-400">Measurements are automatically saved as objects below.</span><br/>
                             Points picked: <strong>{planningPointsPicked}</strong> / 2
                         </div>
                         
@@ -191,14 +192,11 @@ export function PlanningMenu() {
                         )}
 
                         <div className="flex gap-2 mt-2">
-                            <button onClick={handleUndo} disabled={planningPointsPicked === 0} className="flex-1 px-2 py-1.5 rounded bg-emerald-200 dark:bg-emerald-800/50 text-emerald-800 dark:text-emerald-300 font-bold transition hover:bg-emerald-300 dark:hover:bg-emerald-700/50 disabled:opacity-50 disabled:cursor-not-allowed text-center">
-                                Undo
+                            <button onClick={handleUndo} disabled={planningPointsPicked === 0} className="flex-1 px-2 py-1.5 rounded bg-emerald-200 dark:bg-emerald-800/50 text-emerald-800 dark:text-emerald-300 font-semibold transition hover:bg-emerald-300 dark:hover:bg-emerald-700/50 disabled:opacity-50 disabled:cursor-not-allowed text-center">
+                                Undo Picked
                             </button>
-                            <button onClick={handleConfirm} disabled={!canConfirm} className="flex-[2] flex items-center justify-center gap-1 px-2 py-1.5 rounded bg-emerald-600 hover:bg-emerald-700 text-white font-bold transition disabled:opacity-50 disabled:cursor-not-allowed">
-                                Save
-                            </button>
-                            <button onClick={() => setPlanningMode('none')} className="flex-1 px-2 py-1.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-bold transition hover:bg-slate-300 dark:hover:bg-slate-600">
-                                Cancel
+                            <button onClick={() => setPlanningMode('none')} className="flex-1 px-2 py-1.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold transition hover:bg-slate-300 dark:hover:bg-slate-600 text-center">
+                                Done Measuring
                             </button>
                         </div>
                     </div>
@@ -210,10 +208,20 @@ export function PlanningMenu() {
             <div className="flex items-center justify-between mb-3">
                 <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Created Objects</h4>
                 {planningObjects.length > 0 && (
-                    <button onClick={() => viewerManager?.exportAllPlanningObjectsZip()} className="text-[10px] flex items-center gap-1 font-bold text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 uppercase tracking-wider transition">
-                        <Download size={12} />
-                        Zip All
-                    </button>
+                    <div className="flex items-center gap-3">
+                        <button 
+                            onClick={() => viewerManager?.clearAllPlanningObjects()} 
+                            className="text-[10px] flex items-center gap-1 font-bold text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 uppercase tracking-wider transition"
+                            title="Clear all created objects"
+                        >
+                            <Trash2 size={12} />
+                            Reset
+                        </button>
+                        <button onClick={() => viewerManager?.exportAllPlanningObjectsZip()} className="text-[10px] flex items-center gap-1 font-bold text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 uppercase tracking-wider transition">
+                            <Download size={12} />
+                            Zip All
+                        </button>
+                    </div>
                 )}
             </div>
             
@@ -276,6 +284,13 @@ function PlanningObjectItem({ obj, viewerManager, index }: { obj: any, viewerMan
                   {obj.type === 'measurement' && obj.baseDistance !== undefined && (
                       <span className="text-[9px] text-slate-500 font-mono">Dist: {obj.baseDistance.toFixed(2)} mm | Angle: {(obj.angle || 0).toFixed(1)}°</span>
                   )}
+                  <input
+                      type="text"
+                      className="mt-1 text-[10px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 text-slate-700 dark:text-slate-300 placeholder-slate-400 focus:outline-none focus:border-blue-500 transition-colors w-full max-w-[140px]"
+                      placeholder="Add text annotation..."
+                      value={obj.annotation || ''}
+                      onChange={(e) => viewerManager.updatePlanningObjectAnnotation(obj.id, e.target.value)}
+                  />
                 </div>
               </div>
               <div className="flex items-center gap-1">

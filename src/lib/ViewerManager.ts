@@ -102,6 +102,9 @@ export class ViewerManager {
       });
       resizeObserver.observe(this.container);
 
+      // Start the DOM overlay rendering loop
+      this.domUpdateLoop();
+
       window.addEventListener('resize', () => {
         if (this.viewer) this.viewer.Resize();
         if (this.rulersVisible) {
@@ -397,11 +400,6 @@ export class ViewerManager {
       const isMeasure = this.planningMode === 'measure';
       const material = new THREE.MeshBasicMaterial({ color: isMeasure ? 0x10b981 : 0xff0000, depthTest: false });
       const marker = new THREE.Mesh(geometry, material);
-      marker.onBeforeRender = function() {};
-      marker.onAfterRender = function() {};
-      if (material) {
-        material.onBeforeRender = function() {};
-      }
       marker.position.copy(point);
       marker.renderOrder = 999; 
       scene.add(marker);
@@ -410,17 +408,20 @@ export class ViewerManager {
       if (isMeasure && this.planningPoints.length === 2) {
           const p1 = this.planningPoints[0];
           const p2 = this.planningPoints[1];
-          const lineGeom = new THREE.BufferGeometry().setFromPoints([p1, p2]);
-          const lineMat = new THREE.LineBasicMaterial({ color: 0x10b981, linewidth: 3, depthTest: false });
-          if (lineMat) {
-              lineMat.onBeforeRender = function() {};
+          const m = this.calculateMeasurement();
+          const angle = m ? m.angle : 0;
+
+          // Automatically create the permanent measurement cylinder object
+          this.createPlanningMeasurement(p1, p2, angle);
+
+          // Instantly clear the temporary red/green spheres & lines
+          this.clearPlanningPoints();
+
+          // Notify context that the objects list updated
+          if (this.config.onPlanningObjectsChange) {
+              this.config.onPlanningObjectsChange(this.planningObjects);
           }
-          const measureLine = new THREE.LineSegments(lineGeom, lineMat);
-          measureLine.onBeforeRender = function() {};
-          measureLine.onAfterRender = function() {};
-          measureLine.renderOrder = 999;
-          scene.add(measureLine);
-          this.planningPointMarkers.push(measureLine);
+          return;
       }
 
       if (this.config.onPlanningPointsChange) {
@@ -534,14 +535,11 @@ export class ViewerManager {
           color: 0x00ff00, 
           side: THREE.DoubleSide, 
           transparent: true, 
-          opacity: 0.5 
+          opacity: 0.5,
+          depthTest: false
       });
       const mesh = new THREE.Mesh(geometry, material);
-      mesh.onBeforeRender = function() {};
-      mesh.onAfterRender = function() {};
-      if (material) {
-        material.onBeforeRender = function() {};
-      }
+      mesh.renderOrder = 999;
       
       // Orient the plane
       const testNormal = new THREE.Vector3(0, 0, 1);
@@ -557,12 +555,7 @@ export class ViewerManager {
       // Add a wireframe outline to "illustrate planning"
       const edges = new THREE.EdgesGeometry(geometry);
       const lineMaterial = new THREE.LineBasicMaterial({ color: 0x00aa00, linewidth: 2, depthTest: false });
-      if (lineMaterial) {
-        lineMaterial.onBeforeRender = function() {};
-      }
       const line = new THREE.LineSegments(edges, lineMaterial);
-      line.onBeforeRender = function() {};
-      line.onAfterRender = function() {};
       mesh.add(line);
 
       scene.add(mesh);
@@ -574,7 +567,8 @@ export class ViewerManager {
           mesh,
           width,
           height,
-          color: '#00ff00'
+          color: '#00ff00',
+          annotation: ''
       });
   }
 
@@ -598,14 +592,11 @@ export class ViewerManager {
       const material = new THREE.MeshBasicMaterial({ 
           color: 0x0000ff, 
           transparent: true, 
-          opacity: 0.5 
+          opacity: 0.5,
+          depthTest: false
       });
       const mesh = new THREE.Mesh(geometry, material);
-      mesh.onBeforeRender = function() {};
-      mesh.onAfterRender = function() {};
-      if (material) {
-        material.onBeforeRender = function() {};
-      }
+      mesh.renderOrder = 999;
 
       const up = new THREE.Vector3(0, 1, 0);
       const quaternion = new THREE.Quaternion().setFromUnitVectors(up, direction);
@@ -615,12 +606,7 @@ export class ViewerManager {
       // Add a wireframe outline to "illustrate planning"
       const edges = new THREE.EdgesGeometry(geometry);
       const lineMaterial = new THREE.LineBasicMaterial({ color: 0x0000aa, linewidth: 2, depthTest: false });
-      if (lineMaterial) {
-        lineMaterial.onBeforeRender = function() {};
-      }
       const line = new THREE.LineSegments(edges, lineMaterial);
-      line.onBeforeRender = function() {};
-      line.onAfterRender = function() {};
       mesh.add(line);
 
       scene.add(mesh);
@@ -633,9 +619,31 @@ export class ViewerManager {
           radius,
           length,
           baseDistance: distance,
-          color: '#0000ff'
+          color: '#0000ff',
+          annotation: ''
       });
   }
+
+  projectToScreen(point: any) {
+      if (!window.THREE || !this.viewer || !this.viewer.viewer || !this.viewer.viewer.camera) {
+          return null;
+      }
+      const camera = this.viewer.viewer.camera;
+      const canvas = this.container;
+      if (!camera || !canvas) return null;
+
+      const vector = point.clone();
+      vector.project(camera);
+
+      // Convert from normalized device coordinates (NDC) to pixel coordinates
+      const rect = canvas.getBoundingClientRect();
+      const x = (vector.x * .5 + .5) * rect.width;
+      const y = (-(vector.y * .5) + .5) * rect.height;
+
+      // Also return z so we can tell if it's behind the camera
+      return { x, y, z: vector.z };
+  }
+
 
   createPlanningMeasurement(p1: any, p2: any, angle: number) {
       if (!window.THREE || !this.viewer || !this.viewer.viewer) return;
@@ -656,14 +664,11 @@ export class ViewerManager {
       const material = new THREE.MeshBasicMaterial({ 
           color: 0x10b981, 
           transparent: true, 
-          opacity: 0.8 
+          opacity: 0.8,
+          depthTest: false
       });
       const mesh = new THREE.Mesh(geometry, material);
-      mesh.onBeforeRender = function() {};
-      mesh.onAfterRender = function() {};
-      if (material) {
-        material.onBeforeRender = function() {};
-      }
+      mesh.renderOrder = 999;
 
       const up = new THREE.Vector3(0, 1, 0);
       const quaternion = new THREE.Quaternion().setFromUnitVectors(up, direction);
@@ -673,13 +678,18 @@ export class ViewerManager {
       // Add a line outline too
       const edges = new THREE.EdgesGeometry(geometry);
       const lineMaterial = new THREE.LineBasicMaterial({ color: 0x059669, linewidth: 2, depthTest: false });
-      if (lineMaterial) {
-        lineMaterial.onBeforeRender = function() {};
-      }
       const line = new THREE.LineSegments(edges, lineMaterial);
-      line.onBeforeRender = function() {};
-      line.onAfterRender = function() {};
       mesh.add(line);
+
+      // Commenting out creating physical THREE.Sprite label to avoid compatibility issues with o3dv render loop.
+      // We will handle 2D labels in React.
+      const labelDiv = document.createElement('div');
+      labelDiv.className = 'absolute z-50 pointer-events-none font-mono text-[11px] font-bold text-white bg-slate-900 border border-emerald-500 rounded-full px-2 py-0.5 shadow transition-opacity';
+      labelDiv.innerText = `${distance.toFixed(2)} mm`;
+      labelDiv.style.transform = 'translate(-50%, -50%)';
+      labelDiv.style.opacity = '0';
+      this.container.appendChild(labelDiv);
+      const labelSprite = null;
 
       scene.add(mesh);
       this.viewer.viewer.Render();
@@ -688,12 +698,31 @@ export class ViewerManager {
           id: `Measurement_${this.nextPlanningObjectId++}`,
           type: 'measurement',
           mesh,
+          labelSprite,
+          p2, // Save the second point for 2D overlay use
+          labelDiv,
           radius,
           length,
           baseDistance: distance,
           angle: angle,
-          color: '#10b981'
+          color: '#10b981',
+          annotation: ''
       });
+  }
+
+  updatePlanningObjectAnnotation(id: string, annotation: string) {
+      const obj = this.planningObjects.find(o => o.id === id);
+      if (!obj) return;
+      obj.annotation = annotation;
+      
+      if (obj.labelDiv && obj.baseDistance !== undefined) {
+          const text = obj.annotation ? `${obj.baseDistance.toFixed(2)} mm - ${obj.annotation}` : `${obj.baseDistance.toFixed(2)} mm`;
+          obj.labelDiv.innerText = text;
+      }
+
+      if (this.config.onPlanningObjectsChange) {
+          this.config.onPlanningObjectsChange(this.planningObjects);
+      }
   }
 
   updatePlanningObjectTransform(id: string, updates: { posX?: number, posY?: number, posZ?: number, rotX?: number, rotY?: number, rotZ?: number }) {
@@ -729,6 +758,21 @@ export class ViewerManager {
                  scene.remove(obj.mesh);
                  if (obj.mesh.geometry) obj.mesh.geometry.dispose();
                  if (obj.mesh.material) obj.mesh.material.dispose();
+
+                 if (obj.labelSprite) {
+                     scene.remove(obj.labelSprite);
+                     if (obj.labelSprite.material) {
+                         if (obj.labelSprite.material.map) obj.labelSprite.material.map.dispose();
+                         obj.labelSprite.material.dispose();
+                     }
+                 }
+
+                 if (obj.labelDiv) {
+                     if (obj.labelDiv.parentElement) {
+                         obj.labelDiv.parentElement.removeChild(obj.labelDiv);
+                     }
+                 }
+
                  this.viewer.viewer.Render();
              }
           }
@@ -736,6 +780,38 @@ export class ViewerManager {
           if (this.config.onPlanningObjectsChange) {
               this.config.onPlanningObjectsChange(this.planningObjects);
           }
+      }
+  }
+
+  clearAllPlanningObjects() {
+      if (this.viewer && this.viewer.viewer) {
+          const scene = this.viewer.viewer.scene || this.viewer.viewer.mainScene;
+          if (scene) {
+              this.planningObjects.forEach(obj => {
+                  scene.remove(obj.mesh);
+                  if (obj.mesh.geometry) obj.mesh.geometry.dispose();
+                  if (obj.mesh.material) obj.mesh.material.dispose();
+
+                  if (obj.labelSprite) {
+                      scene.remove(obj.labelSprite);
+                      if (obj.labelSprite.material) {
+                          if (obj.labelSprite.material.map) obj.labelSprite.material.map.dispose();
+                          obj.labelSprite.material.dispose();
+                      }
+                  }
+
+                  if (obj.labelDiv) {
+                      if (obj.labelDiv.parentElement) {
+                          obj.labelDiv.parentElement.removeChild(obj.labelDiv);
+                      }
+                  }
+              });
+              this.viewer.viewer.Render();
+          }
+      }
+      this.planningObjects = [];
+      if (this.config.onPlanningObjectsChange) {
+          this.config.onPlanningObjectsChange(this.planningObjects);
       }
   }
 
@@ -1081,9 +1157,6 @@ export class ViewerManager {
       if (val) {
           this.resizeRulers();
           this.lastCameraState = '';
-          this.updateRulersLoop();
-      } else {
-          if (this.rulerAnimationFrame) cancelAnimationFrame(this.rulerAnimationFrame);
       }
   }
 
@@ -1100,37 +1173,52 @@ export class ViewerManager {
       }
   }
 
-  updateRulersLoop = () => {
-    if (!this.rulersVisible) return;
+  domUpdateLoop = () => {
     try {
         if (this.viewer?.viewer?.navigation) {
-            let cam: any = null;
-            if (typeof this.viewer.viewer.navigation.GetCamera === 'function') {
-                cam = this.viewer.viewer.navigation.GetCamera();
-            } else if (this.viewer.viewer.navigation.camera) {
-                // Three.js camera + target from controls?
-                const threeCam = this.viewer.viewer.navigation.camera;
-                // In o3dv, perhaps it's stored in get target?
-                cam = {
-                    eye: threeCam.position,
-                    center: this.viewer.viewer.navigation.controls?.target || new window.THREE.Vector3()
-                };
+            // Update Planning Object Overlays
+            if (this.planningObjects) {
+                this.planningObjects.forEach(obj => {
+                    if (obj.type === 'measurement' && obj.labelDiv && obj.p2) {
+                        const screen = this.projectToScreen(obj.p2);
+                        if (screen && screen.z < 1) { // z < 1 means in front of camera
+                            obj.labelDiv.style.left = `${screen.x}px`;
+                            obj.labelDiv.style.top = `${screen.y - 20}px`; // slightly above
+                            obj.labelDiv.style.opacity = '1';
+                        } else {
+                            obj.labelDiv.style.opacity = '0';
+                        }
+                    }
+                });
             }
-            
-            if (cam && cam.eye && cam.center) {
-                const canvasRect = this.container.getBoundingClientRect();
-                const stateStr = `${Math.round(cam.eye.x * 100)},${Math.round(cam.eye.y * 100)},${Math.round(cam.eye.z * 100)},${Math.round(cam.center.x * 100)},${Math.round(cam.center.y * 100)},${Math.round(cam.center.z * 100)},${Math.round(canvasRect.width)},${Math.round(canvasRect.height)}`;
-                if (stateStr !== this.lastCameraState) { 
-                    this.lastCameraState = stateStr;
-                    this.resizeRulers(); 
-                    this.drawRulers(cam, this.topRulerRef, this.leftRulerRef); 
+
+            if (this.rulersVisible) {
+                let cam: any = null;
+                if (typeof this.viewer.viewer.navigation.GetCamera === 'function') {
+                    cam = this.viewer.viewer.navigation.GetCamera();
+                } else if (this.viewer.viewer.navigation.camera) {
+                    const threeCam = this.viewer.viewer.navigation.camera;
+                    cam = {
+                        eye: threeCam.position,
+                        center: this.viewer.viewer.navigation.controls?.target || new window.THREE.Vector3()
+                    };
                 }
-            }
-        }
+                
+                if (cam && cam.eye && cam.center) {
+                    const canvasRect = this.container.getBoundingClientRect();
+                    const stateStr = `${Math.round(cam.eye.x * 100)},${Math.round(cam.eye.y * 100)},${Math.round(cam.eye.z * 100)},${Math.round(cam.center.x * 100)},${Math.round(cam.center.y * 100)},${Math.round(cam.center.z * 100)},${Math.round(canvasRect.width)},${Math.round(canvasRect.height)}`;
+                    if (stateStr !== this.lastCameraState) { 
+                        this.lastCameraState = stateStr;
+                        this.resizeRulers(); 
+                        this.drawRulers(cam, this.topRulerRef, this.leftRulerRef); 
+                    }
+                }
+            } // end rulersVisible
+        } // end viewer?.viewer?.navigation
     } catch(e) {
-        console.error("Rulers error:", e);
+        console.error("DOM update error:", e);
     }
-    this.rulerAnimationFrame = requestAnimationFrame(this.updateRulersLoop);
+    this.rulerAnimationFrame = requestAnimationFrame(this.domUpdateLoop);
   }
 
   drawRulers(cam: any, topRuler: HTMLCanvasElement | null, leftRuler: HTMLCanvasElement | null) {

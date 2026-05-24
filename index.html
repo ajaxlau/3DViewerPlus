@@ -9,6 +9,22 @@
     <link rel="apple-touch-icon" href="https://ajaxlau.github.io/3DWebViewer/3DPO_Small_Logo.png" />
     <!-- Include Three.js for Raycasting & Math utilities to prevent undefined errors -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" crossorigin="anonymous"></script>
+    <script>
+      if (window.THREE) {
+          if (!window.THREE.Object3D.prototype.onBeforeRender) {
+              window.THREE.Object3D.prototype.onBeforeRender = function() {};
+          }
+          if (!window.THREE.Object3D.prototype.onAfterRender) {
+              window.THREE.Object3D.prototype.onAfterRender = function() {};
+          }
+          if (window.THREE.Material && !window.THREE.Material.prototype.onBeforeRender) {
+              window.THREE.Material.prototype.onBeforeRender = function() {};
+          }
+          if (window.THREE.BufferGeometry && !window.THREE.BufferGeometry.prototype.onBeforeRender) {
+              window.THREE.BufferGeometry.prototype.onBeforeRender = function() {};
+          }
+      }
+    </script>
     <!-- Official Online-3D-Viewer Engine -->
     <script type="text/javascript" src="https://cdn.jsdelivr.net/npm/online-3d-viewer@latest/build/engine/o3dv.min.js" crossorigin="anonymous"></script>
   </head>
