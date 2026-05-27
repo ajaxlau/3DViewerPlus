@@ -26,7 +26,7 @@ export class ViewerManager {
   treeParseInterval: any = null;
 
   // Planning Tools state
-  planningMode: 'none' | 'plane' | 'cylinder' | 'measure' = 'none';
+  planningMode: 'none' | 'plane' | 'cylinder' | 'measure' | 'curve' = 'none';
   planningPoints: any[] = [];
   planningNormals: any[] = [];
   planningPointMarkers: any[] = [];
@@ -348,7 +348,7 @@ export class ViewerManager {
     });
   }
 
-  setPlanningMode(mode: 'none' | 'plane' | 'cylinder' | 'measure') {
+  setPlanningMode(mode: 'none' | 'plane' | 'cylinder' | 'measure' | 'curve') {
       this.planningMode = mode;
       this.clearPlanningPoints();
   }
@@ -484,7 +484,7 @@ export class ViewerManager {
       return { distance, angle };
   }
 
-  confirmPlanningObject(options: { planeExtWidth?: number, planeExtLength?: number, cylinderRadius?: number, cylinderExtension?: number } = {}) {
+  confirmPlanningObject(options: { planeExtWidth?: number, planeExtLength?: number, cylinderRadius?: number, cylinderExtension?: number, curveThickness?: number } = {}) {
       if (this.planningMode === 'plane' && this.planningPoints.length === 3) {
           this.createPlanningPlane(this.planningPoints[0], this.planningPoints[1], this.planningPoints[2], options.planeExtWidth, options.planeExtLength);
           this.setPlanningMode('none');
@@ -501,6 +501,12 @@ export class ViewerManager {
           const m = this.calculateMeasurement();
           const angle = m ? m.angle : 0;
           this.createPlanningMeasurement(this.planningPoints[0], this.planningPoints[1], angle);
+          this.setPlanningMode('none');
+          if (this.config.onPlanningObjectsChange) {
+              this.config.onPlanningObjectsChange(this.planningObjects);
+          }
+      } else if (this.planningMode === 'curve' && this.planningPoints.length >= 2) {
+          this.createPlanningCurve(this.planningPoints, options.curveThickness || 1);
           this.setPlanningMode('none');
           if (this.config.onPlanningObjectsChange) {
               this.config.onPlanningObjectsChange(this.planningObjects);
@@ -620,6 +626,48 @@ export class ViewerManager {
           length,
           baseDistance: distance,
           color: '#0000ff',
+          annotation: ''
+      });
+  }
+
+  createPlanningCurve(points: any[], thickness: number) {
+      if (!window.THREE || !this.viewer || !this.viewer.viewer) return;
+      const scene = this.viewer.viewer.scene || this.viewer.viewer.mainScene;
+      if (!scene) return;
+
+      const THREE = window.THREE;
+      
+      const curve = new THREE.CatmullRomCurve3(points);
+      const radius = thickness / 2;
+      const tubularSegments = Math.max(20, points.length * 10);
+      const radialSegments = 8;
+      const geometry = new THREE.TubeGeometry(curve, tubularSegments, radius, radialSegments, false);
+      
+      const material = new THREE.MeshBasicMaterial({ 
+          color: 0xdb2777, // pink-600 to match lucide colors normally
+          transparent: true, 
+          opacity: 0.6,
+          depthTest: false
+      });
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.renderOrder = 999;
+
+      // Add a wireframe outline to "illustrate planning"
+      const edges = new THREE.EdgesGeometry(geometry);
+      const lineMaterial = new THREE.LineBasicMaterial({ color: 0x9d174d, linewidth: 2, depthTest: false });
+      const line = new THREE.LineSegments(edges, lineMaterial);
+      mesh.add(line);
+
+      scene.add(mesh);
+      this.viewer.viewer.Render();
+
+      this.planningObjects.push({
+          id: `Curve_${this.nextPlanningObjectId++}`,
+          type: 'curve',
+          mesh,
+          thickness,
+          baseDistance: curve.getLength(),
+          color: '#db2777',
           annotation: ''
       });
   }

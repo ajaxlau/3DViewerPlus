@@ -48,8 +48,8 @@ interface ViewerContextState {
   setActiveModal: (modal: 'url' | 'share' | 'embed' | 'snapshot' | 'planning' | null) => void;
 
   // Planning Tools
-  planningMode: 'none' | 'plane' | 'cylinder' | 'measure';
-  setPlanningMode: (mode: 'none' | 'plane' | 'cylinder' | 'measure') => void;
+  planningMode: 'none' | 'plane' | 'cylinder' | 'measure' | 'curve';
+  setPlanningMode: (mode: 'none' | 'plane' | 'cylinder' | 'measure' | 'curve') => void;
   planningObjects: any[];
   setPlanningObjects: (objects: any[]) => void;
   planningPointsPicked: number;
@@ -84,12 +84,12 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
   const [activeModal, setActiveModal] = useState<ViewerContextState['activeModal']>(null);
   
   // Planning Tools state
-  const [planningMode, setPlanningModeState] = useState<'none' | 'plane' | 'cylinder' | 'measure'>('none');
+  const [planningMode, setPlanningModeState] = useState<'none' | 'plane' | 'cylinder' | 'measure' | 'curve'>('none');
   const [planningObjects, setPlanningObjects] = useState<any[]>([]);
   const [planningPointsPicked, setPlanningPointsPicked] = useState(0);
   const [measurement, setMeasurement] = useState<{ distance: number, angle: number } | null>(null);
 
-  const setPlanningMode = (mode: 'none' | 'plane' | 'cylinder' | 'measure') => {
+  const setPlanningMode = (mode: 'none' | 'plane' | 'cylinder' | 'measure' | 'curve') => {
     setPlanningModeState(mode);
     if (viewerManager) {
       viewerManager.setPlanningMode(mode);

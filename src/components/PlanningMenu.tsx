@@ -1,5 +1,5 @@
 import { useViewer } from '../context/ViewerContext';
-import { X, SlidersHorizontal, Download, Trash2, Crosshair, BoxSelect, Ruler } from 'lucide-react';
+import { X, SlidersHorizontal, Download, Trash2, Crosshair, BoxSelect, Ruler, Plus, Spline } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 
 export function PlanningMenu() {
@@ -15,6 +15,7 @@ export function PlanningMenu() {
   const [planeExtLength, setPlaneExtLength] = useState(10);
   const [cylinderDiameter, setCylinderDiameter] = useState(1);
   const [cylinderExtension, setCylinderExtension] = useState(20);
+  const [curveThickness, setCurveThickness] = useState(1);
 
   const [settingsExpanded, setSettingsExpanded] = useState(true);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -44,7 +45,8 @@ export function PlanningMenu() {
           planeExtWidth: planeExtWidth,
           planeExtLength: planeExtLength,
           cylinderRadius: cylinderDiameter / 2,
-          cylinderExtension: cylinderExtension
+          cylinderExtension: cylinderExtension,
+          curveThickness: curveThickness
       });
   };
 
@@ -52,7 +54,7 @@ export function PlanningMenu() {
       viewerManager?.undoPlanningPoint();
   };
 
-  const canConfirm = (planningMode === 'plane' && planningPointsPicked === 3) || (planningMode === 'cylinder' && planningPointsPicked === 2) || (planningMode === 'measure' && planningPointsPicked === 2);
+  const canConfirm = (planningMode === 'plane' && planningPointsPicked === 3) || (planningMode === 'cylinder' && planningPointsPicked === 2) || (planningMode === 'measure' && planningPointsPicked === 2) || (planningMode === 'curve' && planningPointsPicked >= 2);
 
   return (
     <div ref={menuRef} className="absolute right-6 top-[80px] w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl flex flex-col z-50 overflow-hidden">
@@ -67,96 +69,6 @@ export function PlanningMenu() {
 
       <div className="p-4 flex flex-col gap-4 max-h-[70vh] overflow-y-auto">
         <div className="flex flex-col gap-2">
-            <div className={`flex flex-col rounded border transition-colors ${planningMode === 'plane' ? 'border-blue-500' : 'border-slate-200 dark:border-slate-700'}`}>
-                <button 
-                    onClick={() => { setPlanningMode(planningMode === 'plane' ? 'none' : 'plane'); setSettingsExpanded(true); }}
-                    className={`flex items-center p-3 text-xs font-semibold uppercase tracking-wider transition-colors w-full text-left ${
-                        planningMode === 'plane' ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-t' : 'bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded'
-                    }`}
-                >
-                    <BoxSelect size={18} className="mr-3 shrink-0" />
-                    <div className="flex flex-col">
-                        <span>Add Plane</span>
-                        <span className="text-[10px] font-normal opacity-70 normal-case tracking-normal mt-0.5">3 Points</span>
-                    </div>
-                </button>
-                {planningMode === 'plane' && (
-                    <div className="p-3 border-t border-blue-200 dark:border-blue-800/30 bg-blue-50/50 dark:bg-blue-900/10 text-xs text-blue-800 dark:text-blue-300 flex flex-col gap-3 rounded-b">
-                        <div className="text-center font-semibold mb-1">
-                            Click on the 3D model to select points.<br/>
-                            Points picked: <strong>{planningPointsPicked}</strong> / 3
-                        </div>
-                        
-                        {settingsExpanded && (
-                            <div className="flex flex-col gap-2 border-t border-blue-200 dark:border-blue-800/30 pt-3 mb-1">
-                                <label className="flex items-center justify-between text-[10px] uppercase font-bold tracking-wider">
-                                    Ext. Width (mm)
-                                    <input type="number" min="0" value={planeExtWidth} onChange={e => setPlaneExtWidth(parseFloat(e.target.value) || 0)} className="w-16 p-1 rounded text-center border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-900" />
-                                </label>
-                                <label className="flex items-center justify-between text-[10px] uppercase font-bold tracking-wider">
-                                    Ext. Length (mm)
-                                    <input type="number" min="0" value={planeExtLength} onChange={e => setPlaneExtLength(parseFloat(e.target.value) || 0)} className="w-16 p-1 rounded text-center border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-900" />
-                                </label>
-                            </div>
-                        )}
-
-                        <div className="flex gap-2 mt-2">
-                            <button onClick={handleUndo} disabled={planningPointsPicked === 0} className="flex-1 px-2 py-1.5 rounded bg-blue-200 dark:bg-blue-800/50 text-blue-800 dark:text-blue-300 font-bold transition hover:bg-blue-300 dark:hover:bg-blue-700/50 disabled:opacity-50 disabled:cursor-not-allowed">
-                                Undo
-                            </button>
-                            <button onClick={handleConfirm} disabled={!canConfirm} className="flex-[2] flex items-center justify-center gap-1 px-2 py-1.5 rounded bg-blue-600 text-white font-bold transition hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
-                                Add Plane
-                            </button>
-                        </div>
-                    </div>
-                )}
-            </div>
-
-            <div className={`flex flex-col rounded border transition-colors ${planningMode === 'cylinder' ? 'border-amber-500' : 'border-slate-200 dark:border-slate-700'}`}>
-                <button 
-                    onClick={() => { setPlanningMode(planningMode === 'cylinder' ? 'none' : 'cylinder'); setSettingsExpanded(true); }}
-                    className={`flex items-center p-3 text-xs font-semibold uppercase tracking-wider transition-colors w-full text-left ${
-                        planningMode === 'cylinder' ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 rounded-t' : 'bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded'
-                    }`}
-                >
-                    <Crosshair size={18} className="mr-3 shrink-0" />
-                    <div className="flex flex-col">
-                        <span>Add Cylinder</span>
-                        <span className="text-[10px] font-normal opacity-70 normal-case tracking-normal mt-0.5">2 Points</span>
-                    </div>
-                </button>
-                {planningMode === 'cylinder' && (
-                    <div className="p-3 border-t border-amber-200 dark:border-amber-800/30 bg-amber-50/50 dark:bg-amber-900/10 text-xs text-amber-800 dark:text-amber-300 flex flex-col gap-3 rounded-b">
-                        <div className="text-center font-semibold mb-1">
-                            Click on the 3D model to select points.<br/>
-                            Points picked: <strong>{planningPointsPicked}</strong> / 2
-                        </div>
-                        
-                        {settingsExpanded && (
-                            <div className="flex flex-col gap-2 border-t border-amber-200 dark:border-amber-800/30 pt-3 mb-1">
-                                <label className="flex items-center justify-between text-[10px] uppercase font-bold tracking-wider">
-                                    Diameter (mm)
-                                    <input type="number" min="0.1" step="0.1" value={cylinderDiameter} onChange={e => setCylinderDiameter(parseFloat(e.target.value) || 1)} className="w-16 p-1 rounded text-center border border-amber-200 dark:border-amber-800 bg-white dark:bg-slate-900" />
-                                </label>
-                                <label className="flex items-center justify-between text-[10px] uppercase font-bold tracking-wider">
-                                    Ext. Length (mm)
-                                    <input type="number" min="0" value={cylinderExtension} onChange={e => setCylinderExtension(parseFloat(e.target.value) || 0)} className="w-16 p-1 rounded text-center border border-amber-200 dark:border-amber-800 bg-white dark:bg-slate-900" />
-                                </label>
-                            </div>
-                        )}
-
-                        <div className="flex gap-2 mt-2">
-                            <button onClick={handleUndo} disabled={planningPointsPicked === 0} className="flex-1 px-2 py-1.5 rounded bg-amber-200 dark:bg-amber-800/50 text-amber-800 dark:text-amber-300 font-bold transition hover:bg-amber-300 dark:hover:bg-amber-700/50 disabled:opacity-50 disabled:cursor-not-allowed">
-                                Undo
-                            </button>
-                            <button onClick={handleConfirm} disabled={!canConfirm} className="flex-[2] flex items-center justify-center gap-1 px-2 py-1.5 rounded bg-amber-600 dark:bg-amber-500 text-white font-bold transition hover:bg-amber-700 dark:hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed">
-                                Add Cylinder
-                            </button>
-                        </div>
-                    </div>
-                )}
-            </div>
-
             <div className={`flex flex-col rounded border transition-colors ${planningMode === 'measure' ? 'border-emerald-500 bg-emerald-50/5 dark:bg-emerald-950/5' : 'border-slate-200 dark:border-slate-700'}`}>
                 <button 
                     onClick={() => { setPlanningMode(planningMode === 'measure' ? 'none' : 'measure'); setSettingsExpanded(true); }}
@@ -166,7 +78,7 @@ export function PlanningMenu() {
                 >
                     <Ruler size={18} className="mr-3 shrink-0" />
                     <div className="flex flex-col">
-                        <span>Measure Point-to-Point</span>
+                        <span>Measure Distance</span>
                         <span className="text-[10px] font-normal opacity-70 normal-case tracking-normal mt-0.5">2 Points</span>
                     </div>
                 </button>
@@ -202,6 +114,170 @@ export function PlanningMenu() {
                     </div>
                 )}
             </div>
+
+            <div className={`flex flex-col rounded border transition-colors ${planningMode === 'plane' ? 'border-blue-500' : 'border-slate-200 dark:border-slate-700'}`}>
+                <div className={`flex items-center w-full transition-colors ${
+                    planningMode === 'plane' ? 'bg-blue-50 dark:bg-blue-900/20 rounded-t' : 'bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded'
+                }`}>
+                    <button 
+                        onClick={() => { setPlanningMode(planningMode === 'plane' ? 'none' : 'plane'); setSettingsExpanded(true); }}
+                        className={`flex-1 flex items-center p-3 text-xs font-semibold uppercase tracking-wider text-left ${planningMode === 'plane' ? 'text-blue-600 dark:text-blue-400' : ''}`}
+                    >
+                        <BoxSelect size={18} className="mr-3 shrink-0" />
+                        <div className="flex flex-col">
+                            <span>Mark Plane</span>
+                            <span className="text-[10px] font-normal opacity-70 normal-case tracking-normal mt-0.5">3 Points</span>
+                        </div>
+                    </button>
+                    {planningMode === 'plane' && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); setPlanningMode('plane'); setSettingsExpanded(true); }}
+                            className="p-3 text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
+                            title="Start New Plane"
+                        >
+                            <Plus size={18} />
+                        </button>
+                    )}
+                </div>
+                {planningMode === 'plane' && (
+                    <div className="p-3 border-t border-blue-200 dark:border-blue-800/30 bg-blue-50/50 dark:bg-blue-900/10 text-xs text-blue-800 dark:text-blue-300 flex flex-col gap-3 rounded-b">
+                        <div className="text-center font-semibold mb-1">
+                            Click on the 3D model to select points.<br/>
+                            Points picked: <strong>{planningPointsPicked}</strong> / 3
+                        </div>
+                        
+                        {settingsExpanded && (
+                            <div className="flex flex-col gap-2 border-t border-blue-200 dark:border-blue-800/30 pt-3 mb-1">
+                                <label className="flex items-center justify-between text-[10px] uppercase font-bold tracking-wider">
+                                    Ext. Width (mm)
+                                    <input type="number" min="0" value={planeExtWidth} onChange={e => setPlaneExtWidth(parseFloat(e.target.value) || 0)} className="w-16 p-1 rounded text-center border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-900" />
+                                </label>
+                                <label className="flex items-center justify-between text-[10px] uppercase font-bold tracking-wider">
+                                    Ext. Length (mm)
+                                    <input type="number" min="0" value={planeExtLength} onChange={e => setPlaneExtLength(parseFloat(e.target.value) || 0)} className="w-16 p-1 rounded text-center border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-900" />
+                                </label>
+                            </div>
+                        )}
+
+                        <div className="flex gap-2 mt-2">
+                            <button onClick={handleUndo} disabled={planningPointsPicked === 0} className="flex-1 px-2 py-1.5 rounded bg-blue-200 dark:bg-blue-800/50 text-blue-800 dark:text-blue-300 font-bold transition hover:bg-blue-300 dark:hover:bg-blue-700/50 disabled:opacity-50 disabled:cursor-not-allowed">
+                                Undo
+                            </button>
+                            <button onClick={handleConfirm} disabled={!canConfirm} className="flex-[2] flex items-center justify-center gap-1 px-2 py-1.5 rounded bg-blue-600 text-white font-bold transition hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                                Mark Plane
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            <div className={`flex flex-col rounded border transition-colors ${planningMode === 'cylinder' ? 'border-amber-500' : 'border-slate-200 dark:border-slate-700'}`}>
+                <div className={`flex items-center w-full transition-colors ${
+                    planningMode === 'cylinder' ? 'bg-amber-50 dark:bg-amber-900/20 rounded-t' : 'bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded'
+                }`}>
+                    <button 
+                        onClick={() => { setPlanningMode(planningMode === 'cylinder' ? 'none' : 'cylinder'); setSettingsExpanded(true); }}
+                        className={`flex-1 flex items-center p-3 text-xs font-semibold uppercase tracking-wider text-left ${planningMode === 'cylinder' ? 'text-amber-600 dark:text-amber-400' : ''}`}
+                    >
+                        <Crosshair size={18} className="mr-3 shrink-0" />
+                        <div className="flex flex-col">
+                            <span>Mark Cylinder</span>
+                            <span className="text-[10px] font-normal opacity-70 normal-case tracking-normal mt-0.5">2 Points</span>
+                        </div>
+                    </button>
+                    {planningMode === 'cylinder' && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); setPlanningMode('cylinder'); setSettingsExpanded(true); }}
+                            className="p-3 text-amber-500 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 transition-colors"
+                            title="Start New Cylinder"
+                        >
+                            <Plus size={18} />
+                        </button>
+                    )}
+                </div>
+                {planningMode === 'cylinder' && (
+                    <div className="p-3 border-t border-amber-200 dark:border-amber-800/30 bg-amber-50/50 dark:bg-amber-900/10 text-xs text-amber-800 dark:text-amber-300 flex flex-col gap-3 rounded-b">
+                        <div className="text-center font-semibold mb-1">
+                            Click on the 3D model to select points.<br/>
+                            Points picked: <strong>{planningPointsPicked}</strong> / 2
+                        </div>
+                        
+                        {settingsExpanded && (
+                            <div className="flex flex-col gap-2 border-t border-amber-200 dark:border-amber-800/30 pt-3 mb-1">
+                                <label className="flex items-center justify-between text-[10px] uppercase font-bold tracking-wider">
+                                    Diameter (mm)
+                                    <input type="number" min="0.1" step="0.1" value={cylinderDiameter} onChange={e => setCylinderDiameter(parseFloat(e.target.value) || 1)} className="w-16 p-1 rounded text-center border border-amber-200 dark:border-amber-800 bg-white dark:bg-slate-900" />
+                                </label>
+                                <label className="flex items-center justify-between text-[10px] uppercase font-bold tracking-wider">
+                                    Ext. Length (mm)
+                                    <input type="number" min="0" value={cylinderExtension} onChange={e => setCylinderExtension(parseFloat(e.target.value) || 0)} className="w-16 p-1 rounded text-center border border-amber-200 dark:border-amber-800 bg-white dark:bg-slate-900" />
+                                </label>
+                            </div>
+                        )}
+
+                        <div className="flex gap-2 mt-2">
+                            <button onClick={handleUndo} disabled={planningPointsPicked === 0} className="flex-1 px-2 py-1.5 rounded bg-amber-200 dark:bg-amber-800/50 text-amber-800 dark:text-amber-300 font-bold transition hover:bg-amber-300 dark:hover:bg-amber-700/50 disabled:opacity-50 disabled:cursor-not-allowed">
+                                Undo
+                            </button>
+                            <button onClick={handleConfirm} disabled={!canConfirm} className="flex-[2] flex items-center justify-center gap-1 px-2 py-1.5 rounded bg-amber-600 dark:bg-amber-500 text-white font-bold transition hover:bg-amber-700 dark:hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed">
+                                Mark Cylinder
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
+            <div className={`flex flex-col rounded border transition-colors ${planningMode === 'curve' ? 'border-pink-500 bg-pink-50/5 dark:bg-pink-950/5' : 'border-slate-200 dark:border-slate-700'}`}>
+                <div className={`flex items-center w-full transition-colors ${
+                    planningMode === 'curve' ? 'bg-pink-50 dark:bg-pink-900/20 rounded-t' : 'bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded'
+                }`}>
+                    <button 
+                        onClick={() => { setPlanningMode(planningMode === 'curve' ? 'none' : 'curve'); setSettingsExpanded(true); }}
+                        className={`flex-1 flex items-center p-3 text-xs font-semibold uppercase tracking-wider text-left ${planningMode === 'curve' ? 'text-pink-600 dark:text-pink-400' : ''}`}
+                    >
+                        <Spline size={18} className="mr-3 shrink-0" />
+                        <div className="flex flex-col">
+                            <span>Mark Curve</span>
+                            <span className="text-[10px] font-normal opacity-70 normal-case tracking-normal mt-0.5">2+ Points</span>
+                        </div>
+                    </button>
+                    {planningMode === 'curve' && (
+                        <button
+                            onClick={(e) => { e.stopPropagation(); setPlanningMode('curve'); setSettingsExpanded(true); }}
+                            className="p-3 text-pink-500 hover:text-pink-700 dark:text-pink-400 dark:hover:text-pink-300 transition-colors"
+                            title="Start New Curve"
+                        >
+                            <Plus size={18} />
+                        </button>
+                    )}
+                </div>
+                {planningMode === 'curve' && (
+                    <div className="p-3 border-t border-pink-200 dark:border-pink-800/30 bg-pink-50/50 dark:bg-pink-900/10 text-xs text-pink-800 dark:text-pink-300 flex flex-col gap-3 rounded-b">
+                        <div className="text-center font-semibold mb-1">
+                            Click on the 3D model to select curve points.<br/>
+                            Points picked: <strong>{planningPointsPicked}</strong>
+                        </div>
+                        
+                        {settingsExpanded && (
+                            <div className="flex flex-col gap-2 border-t border-pink-200 dark:border-pink-800/30 pt-3 mb-1">
+                                <label className="flex items-center justify-between text-[10px] uppercase font-bold tracking-wider">
+                                    Thickness (mm)
+                                    <input type="number" min="0.1" step="0.1" value={curveThickness} onChange={e => setCurveThickness(parseFloat(e.target.value) || 1)} className="w-16 p-1 rounded text-center border border-pink-200 dark:border-pink-800 bg-white dark:bg-slate-900" />
+                                </label>
+                            </div>
+                        )}
+
+                        <div className="flex gap-2 mt-2">
+                            <button onClick={handleUndo} disabled={planningPointsPicked === 0} className="flex-1 px-2 py-1.5 rounded bg-pink-200 dark:bg-pink-800/50 text-pink-800 dark:text-pink-300 font-bold transition hover:bg-pink-300 dark:hover:bg-pink-700/50 disabled:opacity-50 disabled:cursor-not-allowed">
+                                Undo
+                            </button>
+                            <button onClick={handleConfirm} disabled={!canConfirm} className="flex-[2] flex items-center justify-center gap-1 px-2 py-1.5 rounded bg-pink-600 dark:bg-pink-500 text-white font-bold transition hover:bg-pink-700 dark:hover:bg-pink-600 disabled:opacity-50 disabled:cursor-not-allowed">
+                                Create Curve
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
+
         </div>
 
         <div className="border-t border-slate-200 dark:border-slate-800 pt-4 mt-2">
@@ -280,6 +356,9 @@ function PlanningObjectItem({ obj, viewerManager, index }: { obj: any, viewerMan
                   )}
                   {obj.type === 'plane' && obj.width !== undefined && obj.height !== undefined && (
                       <span className="text-[9px] text-slate-500 font-mono">{obj.width.toFixed(1)} × {obj.height.toFixed(1)} mm</span>
+                  )}
+                  {obj.type === 'curve' && obj.thickness !== undefined && (
+                      <span className="text-[9px] text-slate-500 font-mono">Length: {(obj.baseDistance || 0).toFixed(1)} mm | Thk: {obj.thickness} mm</span>
                   )}
                   {obj.type === 'measurement' && obj.baseDistance !== undefined && (
                       <span className="text-[9px] text-slate-500 font-mono">Dist: {obj.baseDistance.toFixed(2)} mm | Angle: {(obj.angle || 0).toFixed(1)}°</span>
