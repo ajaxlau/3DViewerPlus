@@ -1,6 +1,6 @@
 import { Menu, Link, Share2, Code, Camera, Ruler, Moon, Sun, PenTool } from 'lucide-react';
 import { useViewer } from '../context/ViewerContext';
-import logoUrl from '../3DPO_Small_Logo.png';
+import logoUrl from '../images/3DPO_Small_Logo.png';
 
 export function Header({ toggleSidebar }: { toggleSidebar: () => void }) {
   const { theme, setTheme, activeModal, setActiveModal, toggleRulers, rulersVisible } = useViewer();
