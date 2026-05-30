@@ -15,8 +15,8 @@ export default defineConfig(() => {
         injectRegister: 'auto',
         includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
         manifest: {
-          name: 'NTEC 3D Printing Office - 3DWebViewer',
-          short_name: '3DWebViewer',
+          name: 'NTEC 3D Printing Office - 3DViewerWebApp',
+          short_name: '3DViewerWebApp',
           description: 'A 3D model viewer for NTEC 3D Printing Office',
           theme_color: '#ffffff',
           background_color: '#ffffff',
@@ -24,12 +24,12 @@ export default defineConfig(() => {
           start_url: './',
           icons: [
             {
-              src: 'https://ajaxlau.github.io/3DWebViewer/3DPO_Small_Logo.png',
+              src: 'https://ajaxlau.github.io/3DViewerWebApp/scr/3DPO_Small_Logo.png',
               sizes: '192x192',
               type: 'image/png'
             },
             {
-              src: 'https://ajaxlau.github.io/3DWebViewer/3DPO_Small_Logo.png',
+              src: 'https://ajaxlau.github.io/3DViewerWebApp/scr/3DPO_Small_Logo.png',
               sizes: '512x512',
               type: 'image/png'
             }
