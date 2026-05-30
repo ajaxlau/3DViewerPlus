@@ -1,5 +1,5 @@
 {
-  "name": "NTEC 3D Printing Office - 3DViewerWebApp",
+  "name": "NTEC 3D Printing Office - 3DViewerPlus",
   "description": "An interactive 3D Model Viewer and miniVSP Platform for Medical 3D Printing Service at NTEC.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
