@@ -27,7 +27,7 @@ export function Modals() {
       
       if (!isEmpty && loadedUrl) {
          if (isSandboxUrl) {
-           setShareVal(`https://ajaxlau.github.io/3DViewerPlus/#model=${encodeURIComponent(loadedUrl)}`);
+           setShareVal(`https://ajaxlau.github.io/New3DViewer/#model=${encodeURIComponent(loadedUrl)}`);
            setEmbedVal(`<iframe width="640" height="480" style="border:1px solid #eeeeee;" src="https://ajaxlau.github.io/3DViewerPlus/#model=${encodeURIComponent(loadedUrl)}$backgroundcolor=240,240,240,255$defaultcolor=200,200,200$edgesettings=off,0,0,0,1"></iframe>`);
          } else {
            setShareVal(`${baseUrl}#model=${encodeURIComponent(loadedUrl)}`);
