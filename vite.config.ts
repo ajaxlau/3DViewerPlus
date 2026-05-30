@@ -13,23 +13,23 @@ export default defineConfig(() => {
       VitePWA({
         registerType: 'autoUpdate',
         injectRegister: 'auto',
-        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg', '3DPO_Small_Logo.png'],
         manifest: {
           name: 'NTEC 3D Printing Office - 3DViewerWebApp',
           short_name: '3DViewerWebApp',
-          description: 'A 3D model viewer for NTEC 3D Printing Office',
+          description: 'A 3D Model Viewer and miniVSP for NTEC 3D Printing Office',
           theme_color: '#ffffff',
           background_color: '#ffffff',
           display: 'standalone',
           start_url: './',
           icons: [
             {
-              src: 'https://ajaxlau.github.io/3DViewerWebApp/scr/3DPO_Small_Logo.png',
+              src: './3DPO_Small_Logo.png',
               sizes: '192x192',
               type: 'image/png'
             },
             {
-              src: 'https://ajaxlau.github.io/3DViewerWebApp/scr/3DPO_Small_Logo.png',
+              src: './3DPO_Small_Logo.png',
               sizes: '512x512',
               type: 'image/png'
             }
