@@ -1,6 +1,5 @@
 import { Menu, Link, Share2, Code, Camera, Ruler, Moon, Sun, PenTool } from 'lucide-react';
 import { useViewer } from '../context/ViewerContext';
-import logoUrl from '../3DPO_Small_Logo.png';
 
 export function Header({ toggleSidebar }: { toggleSidebar: () => void }) {
   const { theme, setTheme, activeModal, setActiveModal, toggleRulers, rulersVisible } = useViewer();
@@ -23,7 +22,7 @@ export function Header({ toggleSidebar }: { toggleSidebar: () => void }) {
     <header className="h-[64px] bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6 z-10 shrink-0 md:h-[64px] h-auto py-2 md:py-0 flex-col md:flex-row gap-3 md:gap-0">
       <div className="flex items-center gap-3 font-bold text-[14px] text-slate-800 dark:text-slate-100 tracking-[0.1em] uppercase">
         <img 
-          src={logoUrl} 
+          src="./3DPO_Small_Logo.png" 
           alt="3DPO Logo" 
           className="h-6 w-auto max-w-[150px] object-contain mix-blend-multiply dark:mix-blend-screen dark:invert dark:hue-rotate-180" 
         />
