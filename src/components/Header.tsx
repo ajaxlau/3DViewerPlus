@@ -1,5 +1,6 @@
-import { Menu, FolderOpen, Link, Share2, Code, Camera, Ruler, Moon, Sun, PenTool } from 'lucide-react';
+import { Menu, Link, Share2, Code, Camera, Ruler, Moon, Sun, PenTool } from 'lucide-react';
 import { useViewer } from '../context/ViewerContext';
+import logoUrl from '../3DPO_Small_Logo.png';
 
 export function Header({ toggleSidebar }: { toggleSidebar: () => void }) {
   const { theme, setTheme, activeModal, setActiveModal, toggleRulers, rulersVisible } = useViewer();
@@ -22,7 +23,7 @@ export function Header({ toggleSidebar }: { toggleSidebar: () => void }) {
     <header className="h-[64px] bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6 z-10 shrink-0 md:h-[64px] h-auto py-2 md:py-0 flex-col md:flex-row gap-3 md:gap-0">
       <div className="flex items-center gap-3 font-bold text-[14px] text-slate-800 dark:text-slate-100 tracking-[0.1em] uppercase">
         <img 
-          src="./3DPO_Small_Logo.png" 
+          src={logoUrl} 
           alt="3DPO Logo" 
           className="h-6 w-auto max-w-[150px] object-contain mix-blend-multiply dark:mix-blend-screen dark:invert dark:hue-rotate-180" 
         />
@@ -36,9 +37,6 @@ export function Header({ toggleSidebar }: { toggleSidebar: () => void }) {
           <Menu size={18} />
         </button>
         
-        <button className="w-8 h-8 rounded shrink-0 flex items-center justify-center transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-blue-600 dark:hover:text-blue-400" onClick={handleOpenFiles} title="Open File(s)">
-          <FolderOpen size={18} />
-        </button>
         <button className="w-8 h-8 rounded shrink-0 flex items-center justify-center transition-colors hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-blue-600 dark:hover:text-blue-400" onClick={() => setActiveModal('url')} title="Load from URL">
           <Link size={18} />
         </button>
