@@ -12,6 +12,7 @@ export interface ViewerManagerConfig {
   onPlanningObjectsChange?: (objects: any[]) => void;
   onPlanningPointsChange?: (count: number) => void;
   onMeasurementChange?: (measurement: { distance: number, angle: number } | null) => void;
+  onPlanningGroupsChange?: (groups: any[]) => void;
 }
 
 export class ViewerManager {
@@ -31,7 +32,10 @@ export class ViewerManager {
   planningNormals: any[] = [];
   planningPointMarkers: any[] = [];
   planningObjects: any[] = [];
+  planningGroups: any[] = [];
   nextPlanningObjectId: number = 1;
+  defaultCamera: any = null;
+  loadedFilename: string | null = null;
 
   // Clipping state
   modelBBox: any = null;
@@ -42,6 +46,13 @@ export class ViewerManager {
   rulersVisible: boolean = false;
   rulerAnimationFrame: any = null;
   lastCameraState: string = '';
+
+  // Memory Leak Prevention & Disposal tracking
+  isDisposed: boolean = false;
+  resizeObserver: ResizeObserver | null = null;
+  onWindowResize: (() => void) | null = null;
+  onPointerDown: ((e: PointerEvent) => void) | null = null;
+  onPointerUp: ((e: PointerEvent) => void) | null = null;
 
   constructor(container: HTMLElement, config: ViewerManagerConfig) {
     this.container = container;
@@ -93,25 +104,26 @@ export class ViewerManager {
       });
       this.enforceFreeOrbit();
 
-      const resizeObserver = new ResizeObserver(() => {
+      this.resizeObserver = new ResizeObserver(() => {
         if (this.viewer) this.viewer.Resize();
         if (this.rulersVisible) {
           this.resizeRulers();
           this.lastCameraState = '';
         }
       });
-      resizeObserver.observe(this.container);
+      this.resizeObserver.observe(this.container);
 
       // Start the DOM overlay rendering loop
       this.domUpdateLoop();
 
-      window.addEventListener('resize', () => {
+      this.onWindowResize = () => {
         if (this.viewer) this.viewer.Resize();
         if (this.rulersVisible) {
           this.resizeRulers();
           this.lastCameraState = ''; 
         }
-      });
+      };
+      window.addEventListener('resize', this.onWindowResize);
     } catch (e) {
       console.error("Viewer initialization failed:", e);
     }
@@ -136,6 +148,251 @@ export class ViewerManager {
       this.viewer.FitToWindow();
     } else if (this.viewer && this.viewer.viewer && typeof this.viewer.viewer.FitToWindow === 'function') {
       this.viewer.viewer.FitToWindow();
+    }
+  }
+
+  dispose() {
+    this.isDisposed = true;
+
+    // 1. Clear loaded-model tree builds or parsing polling intervals
+    if (this.treeParseInterval) {
+      clearInterval(this.treeParseInterval);
+      this.treeParseInterval = null;
+    }
+
+    // 2. Halt dynamic rulers & measurement overlay drawing loop
+    if (this.rulerAnimationFrame) {
+      cancelAnimationFrame(this.rulerAnimationFrame);
+      this.rulerAnimationFrame = null;
+    }
+
+    // 3. Clear window resize listener references
+    if (this.onWindowResize) {
+      window.removeEventListener('resize', this.onWindowResize);
+      this.onWindowResize = null;
+    }
+
+    // 4. Disconnect ResizeObserver
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+      this.resizeObserver = null;
+    }
+
+    // 5. Clean up pointer events targeting container element
+    if (this.container) {
+      if (this.onPointerDown) {
+        this.container.removeEventListener('pointerdown', this.onPointerDown);
+        this.onPointerDown = null;
+      }
+      if (this.onPointerUp) {
+        this.container.removeEventListener('pointerup', this.onPointerUp);
+        this.onPointerUp = null;
+      }
+    }
+
+    // 6. Dispose existing planning objects to empty WebGL buffers
+    try {
+      this.clearAllPlanningObjects();
+    } catch (e) {
+      console.warn("Disposal failed on custom planning items", e);
+    }
+
+    // 7. Clear general WebGL context and references in embedded viewer
+    if (this.viewer) {
+      try {
+        if (typeof this.viewer.Clear === 'function') {
+          this.viewer.Clear();
+        }
+      } catch (e) {
+        console.warn("Disposal failed on embedded 3d viewer core", e);
+      }
+      this.viewer = null;
+    }
+
+    // 8. Nullify global window helper binding
+    if (window._viewerManagerInstance === this) {
+      window._viewerManagerInstance = null;
+    }
+  }
+
+  saveToLocalStorage() {
+    if (!this.loadedFilename) return;
+    try {
+      const serialized = this.planningObjects.map(obj => {
+        const base = {
+          id: obj.id,
+          name: obj.name,
+          type: obj.type,
+          color: obj.color,
+          groupId: obj.groupId,
+          visible: obj.visible !== false
+        };
+        if (obj.type === 'plane') {
+          return {
+            ...base,
+            p1: obj.p1,
+            p2: obj.p2,
+            p3: obj.p3,
+            extWidth: obj.extWidth,
+            extLength: obj.extLength,
+            thickness: obj.thickness
+          };
+        } else if (obj.type === 'cylinder') {
+          return {
+            ...base,
+            p1: obj.p1,
+            p2: obj.p2,
+            diameter: obj.diameter,
+            extension: obj.extension
+          };
+        } else if (obj.type === 'curve') {
+          return {
+            ...base,
+            points: obj.points,
+            thickness: obj.thickness
+          };
+        } else if (obj.type === 'measurement') {
+          return {
+            ...base,
+            p1: obj.p1,
+            p2Coord: obj.p2Coord,
+            angle: obj.angle
+          };
+        }
+        return base;
+      });
+      localStorage.setItem(`3dpo_planning_objects_${this.loadedFilename}`, JSON.stringify(serialized));
+      localStorage.setItem(`3dpo_planning_groups_${this.loadedFilename}`, JSON.stringify(this.planningGroups));
+    } catch (e) {
+      console.warn("Failed to save planning objects to localStorage", e);
+    }
+  }
+
+  loadFromLocalStorage() {
+    if (!this.loadedFilename) return;
+    try {
+      // Load groups first
+      const groupsStr = localStorage.getItem(`3dpo_planning_groups_${this.loadedFilename}`);
+      if (groupsStr) {
+        try {
+          this.planningGroups = JSON.parse(groupsStr);
+        } catch (e) {
+          this.planningGroups = [];
+        }
+      } else {
+        this.planningGroups = [];
+      }
+      this.notifyGroupsChanged();
+
+      const dataStr = localStorage.getItem(`3dpo_planning_objects_${this.loadedFilename}`);
+      if (!dataStr) return;
+      const parsed = JSON.parse(dataStr);
+      if (!Array.isArray(parsed)) return;
+
+      const THREE = window.THREE;
+      if (!THREE) return;
+
+      this.clearAllPlanningObjects();
+
+      parsed.forEach(obj => {
+        try {
+          if (obj.type === 'plane') {
+            const p1Val = new THREE.Vector3(obj.p1.x, obj.p1.y, obj.p1.z);
+            const p2Val = new THREE.Vector3(obj.p2.x, obj.p2.y, obj.p2.z);
+            const p3Val = new THREE.Vector3(obj.p3.x, obj.p3.y, obj.p3.z);
+            
+            this.createPlanningPlane(p1Val, p2Val, p3Val, obj.extWidth, obj.extLength);
+            
+            const created = this.planningObjects[this.planningObjects.length - 1];
+            if (created) {
+              created.id = obj.id;
+              created.name = obj.name;
+              created.color = obj.color || '#00ff00';
+              created.groupId = obj.groupId;
+              created.visible = obj.visible !== false;
+              if (obj.thickness !== undefined) {
+                this.updatePlaneGeometry(created.id, obj.extWidth || 0, obj.thickness);
+              }
+              if (created.mesh) {
+                created.mesh.visible = created.visible;
+              }
+            }
+          } else if (obj.type === 'cylinder') {
+            const p1Val = new THREE.Vector3(obj.p1.x, obj.p1.y, obj.p1.z);
+            const p2Val = new THREE.Vector3(obj.p2.x, obj.p2.y, obj.p2.z);
+            
+            this.createPlanningCylinder(p1Val, p2Val, obj.diameter / 2, obj.extension);
+            
+            const created = this.planningObjects[this.planningObjects.length - 1];
+            if (created) {
+              created.id = obj.id;
+              created.name = obj.name;
+              created.color = obj.color || '#0000ff';
+              created.groupId = obj.groupId;
+              created.visible = obj.visible !== false;
+              if (created.mesh) {
+                created.mesh.visible = created.visible;
+              }
+            }
+          } else if (obj.type === 'curve') {
+            const pts = obj.points.map((p: any) => new THREE.Vector3(p.x, p.y, p.z));
+            
+            this.createPlanningCurve(pts, obj.thickness);
+            
+            const created = this.planningObjects[this.planningObjects.length - 1];
+            if (created) {
+              created.id = obj.id;
+              created.name = obj.name;
+              created.color = obj.color || '#db2777';
+              created.groupId = obj.groupId;
+              created.visible = obj.visible !== false;
+              if (created.mesh) {
+                created.mesh.visible = created.visible;
+              }
+            }
+          } else if (obj.type === 'measurement') {
+            const p1Val = new THREE.Vector3(obj.p1.x, obj.p1.y, obj.p1.z);
+            const p2Val = new THREE.Vector3(obj.p2Coord.x, obj.p2Coord.y, obj.p2Coord.z);
+            
+            this.createPlanningMeasurement(p1Val, p2Val, obj.angle || 0);
+            
+            const created = this.planningObjects[this.planningObjects.length - 1];
+            if (created) {
+              created.id = obj.id;
+              created.name = obj.name;
+              created.color = obj.color || '#10b981';
+              created.groupId = obj.groupId;
+              created.visible = obj.visible !== false;
+              if (created.mesh) {
+                created.mesh.visible = created.visible;
+              }
+              if (created.labelDiv && created.baseDistance !== undefined) {
+                const text = created.name ? `${created.name} (${created.baseDistance.toFixed(2)} mm)` : `${created.baseDistance.toFixed(2)} mm`;
+                created.labelDiv.innerText = text;
+                created.labelDiv.style.display = created.visible ? 'block' : 'none';
+              }
+            }
+          }
+        } catch (err) {
+          console.warn("Failed to reconstruct serialized planning object", obj, err);
+        }
+      });
+
+      let maxSerial = 0;
+      parsed.forEach(o => {
+        const parts = o.id.split('_');
+        if (parts.length > 1) {
+          const num = parseInt(parts[1], 10);
+          if (!isNaN(num) && num > maxSerial) maxSerial = num;
+        }
+      });
+      this.nextPlanningObjectId = maxSerial + 1;
+
+      if (this.config.onPlanningObjectsChange) {
+        this.config.onPlanningObjectsChange(this.planningObjects);
+      }
+    } catch (e) {
+      console.warn("Failed to load planning objects from localStorage", e);
     }
   }
 
@@ -196,6 +453,23 @@ export class ViewerManager {
             
             this.config.onStatusChange(`Model loaded successfully.\n**${filename}**`, false);
 
+            this.loadedFilename = filename;
+            
+            // Capture the default camera of the model right after build/zoom
+            if (this.viewer?.viewer?.navigation && typeof this.viewer.viewer.navigation.GetCamera === 'function') {
+                try {
+                    const cam = this.viewer.viewer.navigation.GetCamera();
+                    if (cam) {
+                        this.defaultCamera = new window.OV.Camera(
+                            new window.OV.Coord3D(cam.eye.x, cam.eye.y, cam.eye.z),
+                            new window.OV.Coord3D(cam.center.x, cam.center.y, cam.center.z),
+                            new window.OV.Coord3D(cam.up.x, cam.up.y, cam.up.z),
+                            cam.fov || 45.0
+                        );
+                    }
+                } catch(e) { console.warn("Failed to capture default camera", e); }
+            }
+
             if (pendingCamera && this.viewer.viewer.navigation) {
                 try {
                     const c = pendingCamera;
@@ -203,9 +477,17 @@ export class ViewerManager {
                     const center = new window.OV.Coord3D(c[3], c[4], c[5]);
                     const up = new window.OV.Coord3D(c[6], c[7], c[8]);
                     this.viewer.viewer.navigation.SetCamera(new window.OV.Camera(eye, center, up, c[9] || 45.0));
+                    // Update default camera to override with the URL parameter if present
+                    this.defaultCamera = new window.OV.Camera(
+                        new window.OV.Coord3D(eye.x, eye.y, eye.z),
+                        new window.OV.Coord3D(center.x, center.y, center.z),
+                        new window.OV.Coord3D(up.x, up.y, up.z),
+                        c[9] || 45.0
+                    );
                 } catch(e) { console.warn("Failed to set imported camera", e); }
             }
             this.enforceFreeOrbit();
+            this.loadFromLocalStorage();
           }
         } else if (currentMeshCount > 0) {
           lastMeshCount = currentMeshCount;
@@ -300,11 +582,12 @@ export class ViewerManager {
   setupRaycaster() {
     let pointerDownPos = { x: 0, y: 0 };
     
-    this.container.addEventListener('pointerdown', (e) => {
+    this.onPointerDown = (e: PointerEvent) => {
         pointerDownPos = { x: e.clientX, y: e.clientY };
-    });
+    };
+    this.container.addEventListener('pointerdown', this.onPointerDown);
 
-    this.container.addEventListener('pointerup', (e) => {
+    this.onPointerUp = (e: PointerEvent) => {
         const dist = Math.sqrt(Math.pow(e.clientX - pointerDownPos.x, 2) + Math.pow(e.clientY - pointerDownPos.y, 2));
         if (dist > 5) return; 
 
@@ -345,7 +628,8 @@ export class ViewerManager {
                 this.highlightMesh(null);
             }
         }
-    });
+    };
+    this.container.addEventListener('pointerup', this.onPointerUp);
   }
 
   setPlanningMode(mode: 'none' | 'plane' | 'cylinder' | 'measure' | 'curve') {
@@ -491,12 +775,14 @@ export class ViewerManager {
           if (this.config.onPlanningObjectsChange) {
               this.config.onPlanningObjectsChange(this.planningObjects);
           }
+          this.saveToLocalStorage();
       } else if (this.planningMode === 'cylinder' && this.planningPoints.length === 2) {
           this.createPlanningCylinder(this.planningPoints[0], this.planningPoints[1], options.cylinderRadius, options.cylinderExtension);
           this.setPlanningMode('none');
           if (this.config.onPlanningObjectsChange) {
               this.config.onPlanningObjectsChange(this.planningObjects);
           }
+          this.saveToLocalStorage();
       } else if (this.planningMode === 'measure' && this.planningPoints.length === 2) {
           const m = this.calculateMeasurement();
           const angle = m ? m.angle : 0;
@@ -505,12 +791,14 @@ export class ViewerManager {
           if (this.config.onPlanningObjectsChange) {
               this.config.onPlanningObjectsChange(this.planningObjects);
           }
+          this.saveToLocalStorage();
       } else if (this.planningMode === 'curve' && this.planningPoints.length >= 2) {
-          this.createPlanningCurve(this.planningPoints, options.curveThickness || 1);
+          this.createPlanningCurve(this.planningPoints, options.curveThickness !== undefined ? options.curveThickness : 0.2);
           this.setPlanningMode('none');
           if (this.config.onPlanningObjectsChange) {
               this.config.onPlanningObjectsChange(this.planningObjects);
           }
+          this.saveToLocalStorage();
       }
   }
 
@@ -536,10 +824,11 @@ export class ViewerManager {
       const width = baseWidth + (extWidth !== undefined ? extWidth : 10);
       const height = baseLength + (extLength !== undefined ? extLength : 10);
 
-      const geometry = new THREE.PlaneGeometry(width, height);
+      // thin BoxGeometry (default 0mm thickness)
+      const thickness = 0.0;
+      const geometry = new THREE.BoxGeometry(width, height, thickness);
       const material = new THREE.MeshBasicMaterial({ 
           color: 0x00ff00, 
-          side: THREE.DoubleSide, 
           transparent: true, 
           opacity: 0.5,
           depthTest: false
@@ -567,14 +856,23 @@ export class ViewerManager {
       scene.add(mesh);
       this.viewer.viewer.Render();
 
+      const defaultIdAndName = `Plane_${this.nextPlanningObjectId++}`;
       this.planningObjects.push({
-          id: `Plane_${this.nextPlanningObjectId++}`,
+          id: defaultIdAndName,
+          name: defaultIdAndName,
           type: 'plane',
           mesh,
           width,
           height,
+          thickness,
+          baseWidth,
+          baseLength,
+          extWidth: extWidth !== undefined ? extWidth : 10,
+          extLength: extLength !== undefined ? extLength : 10,
           color: '#00ff00',
-          annotation: ''
+          p1: { x: p1.x, y: p1.y, z: p1.z },
+          p2: { x: p2.x, y: p2.y, z: p2.z },
+          p3: { x: p3.x, y: p3.y, z: p3.z }
       });
   }
 
@@ -618,15 +916,20 @@ export class ViewerManager {
       scene.add(mesh);
       this.viewer.viewer.Render();
 
+      const defaultIdAndName = `Cylinder_${this.nextPlanningObjectId++}`;
       this.planningObjects.push({
-          id: `Cylinder_${this.nextPlanningObjectId++}`,
+          id: defaultIdAndName,
+          name: defaultIdAndName,
           type: 'cylinder',
           mesh,
           radius,
           length,
           baseDistance: distance,
           color: '#0000ff',
-          annotation: ''
+          diameter: radius * 2,
+          extension,
+          p1: { x: p1.x, y: p1.y, z: p1.z },
+          p2: { x: p2.x, y: p2.y, z: p2.z }
       });
   }
 
@@ -661,14 +964,18 @@ export class ViewerManager {
       scene.add(mesh);
       this.viewer.viewer.Render();
 
+      const defaultIdAndName = `Curve_${this.nextPlanningObjectId++}`;
       this.planningObjects.push({
-          id: `Curve_${this.nextPlanningObjectId++}`,
+          id: defaultIdAndName,
+          name: defaultIdAndName,
           type: 'curve',
           mesh,
           thickness,
           baseDistance: curve.getLength(),
+          curvePath: curve,
+          pointsCount: points.length,
           color: '#db2777',
-          annotation: ''
+          points: points.map(p => ({ x: p.x, y: p.y, z: p.z }))
       });
   }
 
@@ -704,7 +1011,7 @@ export class ViewerManager {
       const center = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
       const direction = new THREE.Vector3().subVectors(p2, p1).normalize();
 
-      const radius = 0.5; // Sleek 1mm diameter tube
+      const radius = 0.05; // Sleek 0.1mm diameter tube
       const length = distance;
 
       // CylinderGeometry is along Y axis by default
@@ -742,8 +1049,10 @@ export class ViewerManager {
       scene.add(mesh);
       this.viewer.viewer.Render();
 
+      const defaultIdAndName = `Measurement_${this.nextPlanningObjectId++}`;
       this.planningObjects.push({
-          id: `Measurement_${this.nextPlanningObjectId++}`,
+          id: defaultIdAndName,
+          name: defaultIdAndName,
           type: 'measurement',
           mesh,
           labelSprite,
@@ -754,23 +1063,166 @@ export class ViewerManager {
           baseDistance: distance,
           angle: angle,
           color: '#10b981',
-          annotation: ''
+          p1: { x: p1.x, y: p1.y, z: p1.z },
+          p2Coord: { x: p2.x, y: p2.y, z: p2.z }
       });
   }
 
-  updatePlanningObjectAnnotation(id: string, annotation: string) {
+  updatePlanningObjectName(id: string, name: string) {
       const obj = this.planningObjects.find(o => o.id === id);
       if (!obj) return;
-      obj.annotation = annotation;
+      obj.name = name;
       
       if (obj.labelDiv && obj.baseDistance !== undefined) {
-          const text = obj.annotation ? `${obj.baseDistance.toFixed(2)} mm - ${obj.annotation}` : `${obj.baseDistance.toFixed(2)} mm`;
+          const text = obj.name ? `${obj.name} (${obj.baseDistance.toFixed(2)} mm)` : `${obj.baseDistance.toFixed(2)} mm`;
           obj.labelDiv.innerText = text;
       }
 
       if (this.config.onPlanningObjectsChange) {
           this.config.onPlanningObjectsChange(this.planningObjects);
       }
+      this.saveToLocalStorage();
+  }
+
+  updatePlanningObjectScale(id: string, updates: { scaleX?: number, scaleY?: number, scaleZ?: number }) {
+      const obj = this.planningObjects.find(o => o.id === id);
+      if (!obj) return;
+
+      if (updates.scaleX !== undefined) {
+          obj.scaleX = updates.scaleX;
+          obj.mesh.scale.x = updates.scaleX;
+      }
+      if (updates.scaleY !== undefined) {
+          obj.scaleY = updates.scaleY;
+          obj.mesh.scale.y = updates.scaleY;
+      }
+      if (updates.scaleZ !== undefined) {
+          obj.scaleZ = updates.scaleZ;
+          obj.mesh.scale.z = updates.scaleZ;
+      }
+
+      if (this.viewer && this.viewer.viewer) {
+          this.viewer.viewer.Render();
+      }
+      
+      if (this.config.onPlanningObjectsChange) {
+          this.config.onPlanningObjectsChange(this.planningObjects);
+      }
+      this.saveToLocalStorage();
+  }
+
+  updatePlaneGeometry(id: string, extSize: number, thickness: number) {
+      const THREE = window.THREE;
+      if (!THREE) return;
+      const obj = this.planningObjects.find(o => o.id === id);
+      if (!obj || obj.type !== 'plane' || obj.baseWidth === undefined || obj.baseLength === undefined) return;
+
+      if (obj.mesh.geometry) obj.mesh.geometry.dispose();
+
+      const width = obj.baseWidth + extSize;
+      const height = obj.baseLength + extSize;
+      const renderThickness = Math.max(0.0, thickness);
+
+      const newGeometry = new THREE.BoxGeometry(width, height, renderThickness);
+      obj.mesh.geometry = newGeometry;
+
+      // Update line segments (wireframe outline overlay)
+      const toRemove = obj.mesh.children.filter((child: any) => child.isLineSegments || child.type === 'LineSegments');
+      toRemove.forEach((child: any) => obj.mesh.remove(child));
+
+      const edges = new THREE.EdgesGeometry(newGeometry);
+      const lineMaterial = new THREE.LineBasicMaterial({ color: 0x00aa00, linewidth: 2, depthTest: false });
+      const line = new THREE.LineSegments(edges, lineMaterial);
+      obj.mesh.add(line);
+
+      obj.extWidth = extSize;
+      obj.extLength = extSize;
+      obj.width = width;
+      obj.height = height;
+      obj.thickness = thickness;
+
+      if (this.viewer && this.viewer.viewer) {
+          this.viewer.viewer.Render();
+      }
+
+      if (this.config.onPlanningObjectsChange) {
+          this.config.onPlanningObjectsChange(this.planningObjects);
+      }
+      this.saveToLocalStorage();
+  }
+
+  updateCylinderGeometry(id: string, diameter: number, extension: number) {
+      const THREE = window.THREE;
+      if (!THREE) return;
+      const obj = this.planningObjects.find(o => o.id === id);
+      if (!obj || obj.type !== 'cylinder' || obj.baseDistance === undefined) return;
+
+      if (obj.mesh.geometry) obj.mesh.geometry.dispose();
+
+      const radius = diameter / 2;
+      const length = obj.baseDistance + (extension * 2);
+
+      const newGeometry = new THREE.CylinderGeometry(radius, radius, length, 32);
+      obj.mesh.geometry = newGeometry;
+
+      // Update line segments (wireframe outline overlay)
+      const toRemove = obj.mesh.children.filter((child: any) => child.isLineSegments || child.type === 'LineSegments');
+      toRemove.forEach((child: any) => obj.mesh.remove(child));
+
+      const edges = new THREE.EdgesGeometry(newGeometry);
+      const lineMaterial = new THREE.LineBasicMaterial({ color: 0x0000aa, linewidth: 2, depthTest: false });
+      const line = new THREE.LineSegments(edges, lineMaterial);
+      obj.mesh.add(line);
+
+      obj.radius = radius;
+      obj.length = length;
+      obj.diameter = diameter;
+      obj.extension = extension;
+
+      if (this.viewer && this.viewer.viewer) {
+          this.viewer.viewer.Render();
+      }
+
+      if (this.config.onPlanningObjectsChange) {
+          this.config.onPlanningObjectsChange(this.planningObjects);
+      }
+      this.saveToLocalStorage();
+  }
+
+  updatePlanningObjectCurveThickness(id: string, thickness: number) {
+      const obj = this.planningObjects.find(o => o.id === id);
+      if (!obj || obj.type !== 'curve' || !obj.curvePath) return;
+      
+      const THREE = window.THREE;
+      if (!THREE) return;
+
+      if (obj.mesh.geometry) obj.mesh.geometry.dispose();
+
+      const radius = thickness / 2;
+      const tubularSegments = Math.max(20, obj.pointsCount * 10);
+      const radialSegments = 8;
+      
+      const newGeometry = new THREE.TubeGeometry(obj.curvePath, tubularSegments, radius, radialSegments, false);
+      obj.mesh.geometry = newGeometry;
+      
+      const toRemove = obj.mesh.children.filter((child: any) => child.isLineSegments || child.type === 'LineSegments');
+      toRemove.forEach((child: any) => obj.mesh.remove(child));
+
+      const edges = new THREE.EdgesGeometry(newGeometry);
+      const lineMaterial = new THREE.LineBasicMaterial({ color: 0x9d174d, linewidth: 2, depthTest: false });
+      const line = new THREE.LineSegments(edges, lineMaterial);
+      obj.mesh.add(line);
+
+      obj.thickness = thickness;
+
+      if (this.viewer && this.viewer.viewer) {
+          this.viewer.viewer.Render();
+      }
+      
+      if (this.config.onPlanningObjectsChange) {
+          this.config.onPlanningObjectsChange(this.planningObjects);
+      }
+      this.saveToLocalStorage();
   }
 
   updatePlanningObjectTransform(id: string, updates: { posX?: number, posY?: number, posZ?: number, rotX?: number, rotY?: number, rotZ?: number }) {
@@ -794,6 +1246,7 @@ export class ViewerManager {
       if (this.config.onPlanningObjectsChange) {
           this.config.onPlanningObjectsChange(this.planningObjects);
       }
+      this.saveToLocalStorage();
   }
 
   removePlanningObject(id: string) {
@@ -828,7 +1281,124 @@ export class ViewerManager {
           if (this.config.onPlanningObjectsChange) {
               this.config.onPlanningObjectsChange(this.planningObjects);
           }
+          this.saveToLocalStorage();
       }
+  }
+
+  addPlanningGroup(name: string) {
+    const id = `group_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`;
+    this.planningGroups.push({ id, name, visible: true, isCollapsed: false });
+    this.notifyGroupsChanged();
+    this.saveToLocalStorage();
+    return id;
+  }
+
+  renamePlanningGroup(groupId: string, name: string) {
+    const group = this.planningGroups.find(g => g.id === groupId);
+    if (group) {
+      group.name = name;
+      this.notifyGroupsChanged();
+      this.saveToLocalStorage();
+    }
+  }
+
+  setPlanningGroupCollapsed(groupId: string, collapsed: boolean) {
+    const group = this.planningGroups.find(g => g.id === groupId);
+    if (group) {
+      group.isCollapsed = collapsed;
+      this.notifyGroupsChanged();
+      this.saveToLocalStorage();
+    }
+  }
+
+  removePlanningGroup(groupId: string, deleteAssociated: boolean = false) {
+    const idx = this.planningGroups.findIndex(g => g.id === groupId);
+    if (idx > -1) {
+      this.planningGroups.splice(idx, 1);
+      
+      const objectsToHandle = this.planningObjects.filter(o => o.groupId === groupId);
+      if (deleteAssociated) {
+        // Delete each associated object
+        objectsToHandle.forEach(o => this.removePlanningObject(o.id));
+      } else {
+        // Just move back to default group (unassigned)
+        objectsToHandle.forEach(o => {
+          o.groupId = undefined;
+        });
+      }
+      
+      this.notifyGroupsChanged();
+      if (this.config.onPlanningObjectsChange) {
+        this.config.onPlanningObjectsChange(this.planningObjects);
+      }
+      this.saveToLocalStorage();
+    }
+  }
+
+  setPlanningGroupVisibility(groupId: string, visible: boolean) {
+    const group = this.planningGroups.find(g => g.id === groupId);
+    if (group) {
+      group.visible = visible;
+      
+      // Affect all planning objects in this group
+      this.planningObjects.forEach(o => {
+        if (o.groupId === groupId) {
+          o.visible = visible;
+          if (o.mesh) {
+            o.mesh.visible = visible;
+          }
+          if (o.labelDiv) {
+            o.labelDiv.style.display = visible ? 'block' : 'none';
+          }
+        }
+      });
+      
+      this.notifyGroupsChanged();
+      if (this.viewer?.viewer) {
+        try { this.viewer.viewer.Render(); } catch(e) {}
+      }
+      if (this.config.onPlanningObjectsChange) {
+        this.config.onPlanningObjectsChange(this.planningObjects);
+      }
+      this.saveToLocalStorage();
+    }
+  }
+
+  setPlanningObjectGroupId(id: string, groupId: string | undefined) {
+    const obj = this.planningObjects.find(o => o.id === id);
+    if (obj) {
+      obj.groupId = groupId;
+      this.saveToLocalStorage();
+      if (this.config.onPlanningObjectsChange) {
+        this.config.onPlanningObjectsChange(this.planningObjects);
+      }
+    }
+  }
+
+  togglePlanningObjectVisibility(id: string) {
+    const obj = this.planningObjects.find(o => o.id === id);
+    if (obj) {
+      obj.visible = obj.visible !== undefined ? !obj.visible : false;
+      if (obj.mesh) {
+        obj.mesh.visible = obj.visible;
+      }
+      if (obj.labelDiv) {
+        obj.labelDiv.style.display = obj.visible ? 'block' : 'none';
+      }
+      this.saveToLocalStorage();
+      if (this.viewer?.viewer) {
+        try { this.viewer.viewer.Render(); } catch(e) {}
+      }
+      if (this.config.onPlanningObjectsChange) {
+        this.config.onPlanningObjectsChange(this.planningObjects);
+      }
+    }
+  }
+
+  notifyGroupsChanged() {
+    if (this.config.onPlanningGroupsChange) {
+      this.config.onPlanningGroupsChange([...this.planningGroups]);
+    }
   }
 
   clearAllPlanningObjects() {
@@ -861,9 +1431,27 @@ export class ViewerManager {
       if (this.config.onPlanningObjectsChange) {
           this.config.onPlanningObjectsChange(this.planningObjects);
       }
+      this.saveToLocalStorage();
   }
 
-  generateSTLString(obj: any): string | null {
+  getModelRoot() {
+      if (!window.THREE) return null;
+      if (!this.currentMeshes || this.currentMeshes.length === 0) return null;
+      
+      const firstMesh = this.currentMeshes[0];
+      const scene = this.viewer?.viewer?.scene || this.viewer?.viewer?.mainScene;
+      if (!scene) return null;
+      
+      let current = firstMesh;
+      let modelRoot = firstMesh;
+      while (current.parent && current.parent !== scene) {
+          modelRoot = current.parent;
+          current = current.parent;
+      }
+      return modelRoot;
+  }
+
+  generateSTLString(obj: any, useModelCoordinates: boolean = true): string | null {
       if (!window.THREE) return null;
       const THREE = window.THREE;
       const mesh = obj.mesh;
@@ -871,9 +1459,23 @@ export class ViewerManager {
       if (!geometry.isBufferGeometry) return null;
       
       const cloneGeo = geometry.clone();
-      cloneGeo.applyMatrix4(mesh.matrixWorld);
+      
+      let transformMatrix = mesh.matrixWorld.clone();
+      let isModelAligned = false;
+      if (useModelCoordinates) {
+          const modelRoot = this.getModelRoot();
+          if (modelRoot) {
+              const invModelMatrix = new THREE.Matrix4().copy(modelRoot.matrixWorld).invert();
+              transformMatrix.premultiply(invModelMatrix);
+              isModelAligned = true;
+          }
+      }
+      cloneGeo.applyMatrix4(transformMatrix);
 
-      let stl = `solid ${obj.id}\n`;
+      // Coordinate System Metadata embedded in the STL solid description line
+      const cleanName = (obj.name || obj.id).replace(/\s+/g, '_');
+      const csLabel = isModelAligned ? "coordinate_system=Loaded_Model_Space" : "coordinate_system=Right-Handed_Cartesian";
+      let stl = `solid ${cleanName} ${csLabel} units=millimeter origin=0,0,0\n`;
 
       const positionAttr = cloneGeo.getAttribute('position');
       const indexAttr = cloneGeo.getIndex();
@@ -912,21 +1514,21 @@ export class ViewerManager {
           }
       }
       
-      stl += `endsolid ${obj.id}\n`;
+      stl += `endsolid ${cleanName}\n`;
       return stl;
   }
 
   exportPlanningObjectSTL(id: string) {
       const obj = this.planningObjects.find(o => o.id === id);
       if (!obj) return;
-      const stl = this.generateSTLString(obj);
+      const stl = this.generateSTLString(obj, true);
       if (!stl) return;
 
       const blob = new Blob([stl], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `${obj.id}.stl`;
+      link.download = `${obj.name || obj.id}.stl`;
       link.click();
       URL.revokeObjectURL(url);
   }
@@ -940,21 +1542,52 @@ export class ViewerManager {
       const metadataList: any[] = [];
 
       this.planningObjects.forEach(obj => {
-          const stl = this.generateSTLString(obj);
+          const stl = this.generateSTLString(obj, true);
           if (stl) {
-              zip.file(`${obj.id}.stl`, stl);
+              zip.file(`${obj.name || obj.id}.stl`, stl);
               metadataList.push({
                   id: obj.id,
+                  name: obj.name || obj.id,
                   type: obj.type,
                   color: obj.color,
                   baseDistance: obj.baseDistance,
                   angle: obj.angle,
-                  annotation: obj.annotation
+                  groupId: obj.groupId || null,
+                  groupName: obj.groupId ? (this.planningGroups.find(g => g.id === obj.groupId)?.name || '') : '',
+                  coordinateSystem: {
+                      systemType: "Loaded Model Local Coordinate Space",
+                      units: "millimeters (mm)",
+                      origin: "Aligned with loaded model origin (local space)"
+                  }
               });
           }
       });
       
-      zip.file('metadata.json', JSON.stringify(metadataList, null, 2));
+      const exportData = {
+          coordinateSystem: {
+              systemType: "Loaded Model Local Coordinate Space",
+              units: "millimeters (mm)",
+              origin: "Aligned with loaded model origin (local space)",
+              note: "Planning objects coordinates have been exported relative to the same coordinate system as the loaded 3D model."
+          },
+          objects: metadataList
+      };
+
+      zip.file('metadata.json', JSON.stringify(exportData, null, 2));
+
+      // Separate explicit README for clarity on standard clinical and engineering coordinate alignment
+      const readmeText = `COORDINATE SYSTEM DEFINITION & SPECIFICATION
+---------------------------------------------
+System Type: Loaded Model Local Coordinate Space
+Units of Measurement: Millimeters (mm)
+
+Geometry Details:
+All exported 3D STL files are saved relative to the loaded model's own local coordinate system.
+This compensates for any centering, scaling, or rotative transformations applied on-screen in the viewer canvas.
+These files are ready to be aligned directly back into standard engineering and CAD tools in the model's native workspace coordinate framework.
+`;
+
+      zip.file('coordinate_system_info.txt', readmeText);
 
       const blob = await zip.generateAsync({ type: 'blob' });
       const url = URL.createObjectURL(blob);
@@ -1277,6 +1910,7 @@ export class ViewerManager {
     } catch(e) {
         console.error("DOM update error:", e);
     }
+    if (this.isDisposed) return;
     this.rulerAnimationFrame = requestAnimationFrame(this.domUpdateLoop);
   }
 
@@ -1393,7 +2027,25 @@ export class ViewerManager {
           renderer.setClearColor(hexColor, bg.a / 255);
       }
       
-      try { renderer.render(v.scene, v.camera); } catch(e) { console.error(e); }
+      // Temporarily hide only draft temporary indicator points from the snapshot rendering
+      const hiddenObjects: any[] = [];
+      this.planningPointMarkers.forEach(marker => {
+          if (marker.visible) {
+              marker.visible = false;
+              hiddenObjects.push(marker);
+          }
+      });
+
+      try {
+          renderer.render(v.scene, v.camera);
+      } catch(e) {
+          console.error(e);
+      } finally {
+          // Restore visibility immediately after rendering
+          hiddenObjects.forEach(obj => {
+              obj.visible = true;
+          });
+      }
 
       const masterCanvas = document.createElement('canvas');
       masterCanvas.width = width;
@@ -1402,6 +2054,66 @@ export class ViewerManager {
       if (!ctx) return null;
       
       ctx.drawImage(renderer.domElement, 0, 0, width, height);
+
+      // Draw measurement annotations onto the 2D canvas of the snapshot
+      const scaleFactor = Math.max(1, height / oldHeight);
+      
+      const projectToTargetSize = (point: any, w: number, h: number, camera: any) => {
+          if (!window.THREE) return null;
+          const vector = point.clone();
+          vector.project(camera);
+          const x = (vector.x * 0.5 + 0.5) * w;
+          const y = (-(vector.y * 0.5) + 0.5) * h;
+          return { x, y, z: vector.z };
+      };
+
+      this.planningObjects.forEach(obj => {
+          if (obj.type === 'measurement' && obj.visible !== false && obj.p2) {
+              const proj = projectToTargetSize(obj.p2, width, height, v.camera);
+              if (proj && proj.z < 1) {
+                  const text = obj.labelDiv ? obj.labelDiv.innerText : (obj.name ? `${obj.name} (${obj.baseDistance.toFixed(2)} mm)` : `${obj.baseDistance.toFixed(2)} mm`);
+                  
+                  ctx.save();
+                  ctx.font = `bold ${Math.round(11 * scaleFactor)}px monospace`;
+                  
+                  // Calculate text metric measurements
+                  const textMetrics = ctx.measureText(text);
+                  const textWidth = textMetrics.width;
+                  const textHeight = 11 * scaleFactor;
+                  
+                  const padX = 8 * scaleFactor;
+                  const padY = 4 * scaleFactor;
+                  
+                  const pillW = textWidth + padX * 2;
+                  const pillH = textHeight + padY * 2;
+                  
+                  const pillX = proj.x - pillW / 2;
+                  const pillY = proj.y - 12 * scaleFactor - pillH / 2; // Draw slightly above
+                  
+                  // Draw capsule background pill
+                  ctx.fillStyle = 'rgba(15, 23, 42, 0.9)'; // Dark slate-900 background
+                  ctx.strokeStyle = '#10b981'; // Emerald-500 border
+                  ctx.lineWidth = 1 * scaleFactor;
+                  
+                  ctx.beginPath();
+                  const r = Math.min(pillW, pillH) / 2;
+                  if (ctx.roundRect) {
+                      ctx.roundRect(pillX, pillY, pillW, pillH, r);
+                  } else {
+                      ctx.rect(pillX, pillY, pillW, pillH);
+                  }
+                  ctx.fill();
+                  ctx.stroke();
+                  
+                  // Center and paint text label
+                  ctx.fillStyle = '#ffffff';
+                  ctx.textAlign = 'center';
+                  ctx.textBaseline = 'middle';
+                  ctx.fillText(text, proj.x, proj.y - 12 * scaleFactor);
+                  ctx.restore();
+              }
+          }
+      });
 
       // Draw Rulers if active
       if (this.rulersVisible) {
@@ -1474,5 +2186,79 @@ export class ViewerManager {
       
       try { v.Render(); } catch(e) {}
       return dataUrl;
+  }
+
+  capture360Snapshots(width: number, height: number, isTransparent: boolean): { angle: number; dataUrl: string }[] {
+      if (!this.viewer?.viewer?.navigation) return [];
+      
+      const v = this.viewer.viewer;
+      const nav = v.navigation;
+      
+      let originalCam: any = null;
+      if (typeof nav.GetCamera === 'function') {
+          originalCam = nav.GetCamera();
+      } else if (nav.camera) {
+          const threeCam = nav.camera;
+          originalCam = new window.OV.Camera(
+              new window.OV.Coord3D(threeCam.position.x, threeCam.position.y, threeCam.position.z),
+              new window.OV.Coord3D(nav.controls?.target?.x || 0, nav.controls?.target?.y || 0, nav.controls?.target?.z || 0),
+              new window.OV.Coord3D(threeCam.up.x, threeCam.up.y, threeCam.up.z),
+              threeCam.fov || 45.0
+          );
+      }
+      
+      if (!originalCam) return [];
+
+      const results: { angle: number; dataUrl: string }[] = [];
+      const eye = originalCam.eye;
+      const center = originalCam.center;
+      const up = originalCam.up;
+      const fov = originalCam.fov || 45.0;
+
+      if (!window.THREE) return [];
+
+      try {
+          for (let i = 0; i < 6; i++) {
+              const angleDeg = i * 60;
+              const angleRad = (angleDeg * Math.PI) / 180;
+
+              // Calculate camera eye position rotated by angleRad around current up vector
+              const offset = new window.THREE.Vector3(eye.x - center.x, eye.y - center.y, eye.z - center.z);
+              const upVec = new window.THREE.Vector3(up.x, up.y, up.z).normalize();
+              offset.applyAxisAngle(upVec, angleRad);
+
+              const newEye = new window.THREE.Vector3(center.x, center.y, center.z).add(offset);
+
+              const tempCam = new window.OV.Camera(
+                  new window.OV.Coord3D(newEye.x, newEye.y, newEye.z),
+                  new window.OV.Coord3D(center.x, center.y, center.z),
+                  new window.OV.Coord3D(up.x, up.y, up.z),
+                  fov
+              );
+
+              nav.SetCamera(tempCam);
+              v.Render();
+
+              const dataUrl = this.captureSnapshot(width, height, isTransparent);
+              if (dataUrl) {
+                  results.push({ angle: angleDeg, dataUrl });
+              }
+          }
+      } catch (err) {
+          console.error("Failed during 360 snapshots rotation", err);
+      } finally {
+          // Restore original camera orientation
+          try {
+              const eyeRestore = new window.OV.Coord3D(eye.x, eye.y, eye.z);
+              const centerRestore = new window.OV.Coord3D(center.x, center.y, center.z);
+              const upRestore = new window.OV.Coord3D(up.x, up.y, up.z);
+              nav.SetCamera(new window.OV.Camera(eyeRestore, centerRestore, upRestore, fov));
+              v.Render();
+          } catch(e) {
+              console.warn("Could not restore camera state:", e);
+          }
+      }
+
+      return results;
   }
 }

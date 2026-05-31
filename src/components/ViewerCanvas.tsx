@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useViewer } from '../context/ViewerContext';
-import { BoxSelect } from 'lucide-react';
+import { BoxSelect, Camera } from 'lucide-react';
 
 export function ViewerCanvas() {
-  const { setContainerRef, setRulerRefs, isEmpty, rulersVisible } = useViewer();
+  const { setContainerRef, setRulerRefs, isEmpty, rulersVisible, viewerManager, filename } = useViewer();
   const [isDragging, setIsDragging] = useState(false);
   
   const handleOpenFiles = () => {
@@ -47,6 +47,22 @@ export function ViewerCanvas() {
     };
   }, []);
 
+  const handleQuickSnapshot = () => {
+    if (!viewerManager) return;
+    try {
+      const dataUrl = viewerManager.captureSnapshot(1920, 1080, false);
+      if (dataUrl) {
+        const link = document.createElement('a');
+        link.href = dataUrl;
+        const dlName = filename || 'snapshot';
+        link.download = `${dlName.replace(/\.[^/.]+$/, "")}_snapshot.png`;
+        link.click();
+      }
+    } catch (e) {
+      console.warn("Failed to generate quick snapshot", e);
+    }
+  };
+
   return (
     <main className="flex-1 w-full h-full relative bg-white dark:bg-slate-950 flex items-center justify-center overflow-hidden">
       {/* 3D Canvas Container */}
@@ -55,6 +71,17 @@ export function ViewerCanvas() {
         className="w-full h-full outline-none absolute inset-0 mix-blend-normal"
         id="viewer-container"
       />
+      
+      {/* Floating Action Buttons */}
+      {!isEmpty && (
+        <button
+          onClick={handleQuickSnapshot}
+          className="absolute bottom-6 right-6 z-20 w-11 h-11 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center shadow-lg transition-all hover:scale-105 active:scale-95 group focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+          title="One-Click Snapshot"
+        >
+          <Camera size={18} className="transition-transform group-hover:rotate-6" />
+        </button>
+      )}
       
       {/* Rulers Overlay Layer */}
       <div className={`absolute inset-0 z-10 pointer-events-none transition-opacity duration-300 ${rulersVisible ? 'opacity-100' : 'opacity-0'}`}>

@@ -52,6 +52,8 @@ interface ViewerContextState {
   setPlanningMode: (mode: 'none' | 'plane' | 'cylinder' | 'measure' | 'curve') => void;
   planningObjects: any[];
   setPlanningObjects: (objects: any[]) => void;
+  planningGroups: any[];
+  setPlanningGroups: (groups: any[]) => void;
   planningPointsPicked: number;
   measurement: { distance: number, angle: number } | null;
 
@@ -86,6 +88,7 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
   // Planning Tools state
   const [planningMode, setPlanningModeState] = useState<'none' | 'plane' | 'cylinder' | 'measure' | 'curve'>('none');
   const [planningObjects, setPlanningObjects] = useState<any[]>([]);
+  const [planningGroups, setPlanningGroups] = useState<any[]>([]);
   const [planningPointsPicked, setPlanningPointsPicked] = useState(0);
   const [measurement, setMeasurement] = useState<{ distance: number, angle: number } | null>(null);
 
@@ -109,6 +112,14 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (viewerManager) {
+        viewerManager.dispose();
+      }
+    };
+  }, [viewerManager]);
+
   const setTheme = (newTheme: 'light' | 'dark') => {
     setThemeState(newTheme);
     if (newTheme === 'dark') document.documentElement.classList.add('dark');
@@ -131,6 +142,7 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
         onMeshesChange: (newMeshes) => setMeshes(newMeshes),
         onMeshHighlighted: (id) => setHighlightedMeshId(id),
         onPlanningObjectsChange: (objects) => setPlanningObjects([...objects]),
+        onPlanningGroupsChange: (groups) => setPlanningGroups([...groups]),
         onPlanningPointsChange: (count) => setPlanningPointsPicked(count),
         onMeasurementChange: (m) => setMeasurement(m)
       });
@@ -218,6 +230,7 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
       toggleMeshVisibility, setMeshOpacity, highlightMesh, highlightedMeshId,
       rulersVisible, toggleRulers, activeModal, setActiveModal,
       planningMode, setPlanningMode, planningObjects, setPlanningObjects, planningPointsPicked,
+      planningGroups, setPlanningGroups,
       measurement,
       setContainerRef, setRulerRefs
     }}>

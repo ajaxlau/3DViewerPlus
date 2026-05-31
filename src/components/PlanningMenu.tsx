@@ -1,5 +1,5 @@
 import { useViewer } from '../context/ViewerContext';
-import { X, SlidersHorizontal, Download, Trash2, Crosshair, BoxSelect, Ruler, Plus, Spline } from 'lucide-react';
+import { X, SlidersHorizontal, Download, Trash2, Crosshair, BoxSelect, Ruler, Plus, Spline, Eye, EyeOff, Folder, FolderPlus, ChevronDown, ChevronRight, FolderOpen } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 
 export function PlanningMenu() {
@@ -7,7 +7,7 @@ export function PlanningMenu() {
     activeModal, setActiveModal, 
     planningMode, setPlanningMode, 
     planningObjects, planningPointsPicked,
-    viewerManager, measurement
+    viewerManager, measurement, planningGroups = []
   } = useViewer();
 
   // Settings
@@ -15,7 +15,16 @@ export function PlanningMenu() {
   const [planeExtLength, setPlaneExtLength] = useState(10);
   const [cylinderDiameter, setCylinderDiameter] = useState(1);
   const [cylinderExtension, setCylinderExtension] = useState(20);
-  const [curveThickness, setCurveThickness] = useState(1);
+  const [curveThickness, setCurveThickness] = useState(0.2);
+
+  const [newGroupName, setNewGroupName] = useState('');
+  const [confirmDeleteGroupId, setConfirmDeleteGroupId] = useState<string | null>(null);
+  
+  const handleCreateGroup = () => {
+    if (!newGroupName.trim() || !viewerManager) return;
+    viewerManager.addPlanningGroup(newGroupName.trim());
+    setNewGroupName('');
+  };
 
   const [settingsExpanded, setSettingsExpanded] = useState(true);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -146,24 +155,13 @@ export function PlanningMenu() {
                             Points picked: <strong>{planningPointsPicked}</strong> / 3
                         </div>
                         
-                        {settingsExpanded && (
-                            <div className="flex flex-col gap-2 border-t border-blue-200 dark:border-blue-800/30 pt-3 mb-1">
-                                <label className="flex items-center justify-between text-[10px] uppercase font-bold tracking-wider">
-                                    Ext. Width (mm)
-                                    <input type="number" min="0" value={planeExtWidth} onChange={e => setPlaneExtWidth(parseFloat(e.target.value) || 0)} className="w-16 p-1 rounded text-center border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-900" />
-                                </label>
-                                <label className="flex items-center justify-between text-[10px] uppercase font-bold tracking-wider">
-                                    Ext. Length (mm)
-                                    <input type="number" min="0" value={planeExtLength} onChange={e => setPlaneExtLength(parseFloat(e.target.value) || 0)} className="w-16 p-1 rounded text-center border border-blue-200 dark:border-blue-800 bg-white dark:bg-slate-900" />
-                                </label>
-                            </div>
-                        )}
+                        {/* Object dimensions are now adjusted via sliders in the created item */}
 
                         <div className="flex gap-2 mt-2">
                             <button onClick={handleUndo} disabled={planningPointsPicked === 0} className="flex-1 px-2 py-1.5 rounded bg-blue-200 dark:bg-blue-800/50 text-blue-800 dark:text-blue-300 font-bold transition hover:bg-blue-300 dark:hover:bg-blue-700/50 disabled:opacity-50 disabled:cursor-not-allowed">
                                 Undo
                             </button>
-                            <button onClick={handleConfirm} disabled={!canConfirm} className="flex-[2] flex items-center justify-center gap-1 px-2 py-1.5 rounded bg-blue-600 text-white font-bold transition hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed">
+                            <button onClick={handleConfirm} disabled={!canConfirm} className="flex-[2] flex items-center justify-center gap-1 px-2 py-1.5 rounded bg-blue-600 dark:bg-blue-500 text-white font-bold transition hover:bg-blue-700 dark:hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed">
                                 Mark Plane
                             </button>
                         </div>
@@ -202,18 +200,7 @@ export function PlanningMenu() {
                             Points picked: <strong>{planningPointsPicked}</strong> / 2
                         </div>
                         
-                        {settingsExpanded && (
-                            <div className="flex flex-col gap-2 border-t border-amber-200 dark:border-amber-800/30 pt-3 mb-1">
-                                <label className="flex items-center justify-between text-[10px] uppercase font-bold tracking-wider">
-                                    Diameter (mm)
-                                    <input type="number" min="0.1" step="0.1" value={cylinderDiameter} onChange={e => setCylinderDiameter(parseFloat(e.target.value) || 1)} className="w-16 p-1 rounded text-center border border-amber-200 dark:border-amber-800 bg-white dark:bg-slate-900" />
-                                </label>
-                                <label className="flex items-center justify-between text-[10px] uppercase font-bold tracking-wider">
-                                    Ext. Length (mm)
-                                    <input type="number" min="0" value={cylinderExtension} onChange={e => setCylinderExtension(parseFloat(e.target.value) || 0)} className="w-16 p-1 rounded text-center border border-amber-200 dark:border-amber-800 bg-white dark:bg-slate-900" />
-                                </label>
-                            </div>
-                        )}
+                        {/* Object dimensions are now adjusted via sliders in the created item */}
 
                         <div className="flex gap-2 mt-2">
                             <button onClick={handleUndo} disabled={planningPointsPicked === 0} className="flex-1 px-2 py-1.5 rounded bg-amber-200 dark:bg-amber-800/50 text-amber-800 dark:text-amber-300 font-bold transition hover:bg-amber-300 dark:hover:bg-amber-700/50 disabled:opacity-50 disabled:cursor-not-allowed">
@@ -257,14 +244,7 @@ export function PlanningMenu() {
                             Points picked: <strong>{planningPointsPicked}</strong>
                         </div>
                         
-                        {settingsExpanded && (
-                            <div className="flex flex-col gap-2 border-t border-pink-200 dark:border-pink-800/30 pt-3 mb-1">
-                                <label className="flex items-center justify-between text-[10px] uppercase font-bold tracking-wider">
-                                    Thickness (mm)
-                                    <input type="number" min="0.1" step="0.1" value={curveThickness} onChange={e => setCurveThickness(parseFloat(e.target.value) || 1)} className="w-16 p-1 rounded text-center border border-pink-200 dark:border-pink-800 bg-white dark:bg-slate-900" />
-                                </label>
-                            </div>
-                        )}
+                        {/* Object dimensions are now adjusted via sliders in the created item */}
 
                         <div className="flex gap-2 mt-2">
                             <button onClick={handleUndo} disabled={planningPointsPicked === 0} className="flex-1 px-2 py-1.5 rounded bg-pink-200 dark:bg-pink-800/50 text-pink-800 dark:text-pink-300 font-bold transition hover:bg-pink-300 dark:hover:bg-pink-700/50 disabled:opacity-50 disabled:cursor-not-allowed">
@@ -300,6 +280,28 @@ export function PlanningMenu() {
                     </div>
                 )}
             </div>
+
+            {/* Inline Group Creation Form */}
+            <div className="flex gap-2 mb-4 bg-slate-50 dark:bg-slate-900/60 p-2 rounded border border-slate-100 dark:border-slate-800">
+                <input 
+                    type="text" 
+                    placeholder="Create Object Group..." 
+                    className="flex-1 bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-[11px] rounded px-2.5 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500 text-slate-800 dark:text-slate-100"
+                    value={newGroupName}
+                    onChange={(e) => setNewGroupName(e.target.value)}
+                    onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleCreateGroup();
+                    }}
+                />
+                <button 
+                    onClick={handleCreateGroup} 
+                    className="px-2 py-1 py-1.5 rounded bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] flex items-center gap-1 transition shadow-sm shrink-0"
+                    title="Create Group"
+                >
+                    <FolderPlus size={12} />
+                    <span>Group</span>
+                </button>
+            </div>
             
             {planningObjects.length === 0 && (
                 <div className="text-center text-xs text-slate-500 py-4 opacity-70">
@@ -307,99 +309,352 @@ export function PlanningMenu() {
                 </div>
             )}
 
-            <div className="flex flex-col gap-3">
-                {planningObjects.map((obj, i) => (
-                    <PlanningObjectItem key={obj.id} obj={obj} viewerManager={viewerManager} index={i} />
-                ))}
-            </div>
+            {planningObjects.length > 0 && (
+                <div className="flex flex-col gap-3">
+                    {/* Render custom groups */}
+                    {planningGroups.map(group => {
+                        const groupObjects = planningObjects.filter(obj => obj.groupId === group.id);
+                        return (
+                            <div key={group.id} className="border border-slate-250 dark:border-slate-800 rounded mb-2 overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
+                                <div className="flex items-center gap-1 bg-slate-100/50 dark:bg-slate-800/60 px-2 py-1.5 border-b border-slate-200 dark:border-slate-800 justify-between">
+                                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                        <button 
+                                            onClick={() => viewerManager?.setPlanningGroupCollapsed(group.id, !group.isCollapsed)} 
+                                            className="p-1 text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 transition shrink-0"
+                                        >
+                                            {group.isCollapsed ? <ChevronRight size={13} /> : <ChevronDown size={13} />}
+                                        </button>
+                                        <Folder size={13} className="text-blue-500 dark:text-blue-400 shrink-0" />
+                                        
+                                        <input 
+                                            type="text" 
+                                            className="text-[11px] font-bold bg-transparent border-none text-slate-850 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-950 focus:ring-1 focus:ring-blue-500 rounded px-1.5 py-0.5 w-full flex-1 min-w-0"
+                                            value={group.name}
+                                            onChange={(e) => viewerManager?.renamePlanningGroup(group.id, e.target.value)}
+                                            placeholder="Edit group name..."
+                                        />
+                                        
+                                        <span className="text-[9px] font-mono text-slate-400 shrink-0">({groupObjects.length})</span>
+                                    </div>
+                                    
+                                    <div className="flex items-center gap-0.5 shrink-0">
+                                        <button 
+                                            onClick={() => viewerManager?.setPlanningGroupVisibility(group.id, group.visible === false)} 
+                                            className="p-1 text-slate-400 hover:text-blue-500 dark:text-slate-500 dark:hover:text-blue-400 transition"
+                                            title={group.visible === false ? "Show Group" : "Hide Group"}
+                                        >
+                                            {group.visible === false ? <EyeOff size={13} /> : <Eye size={13} />}
+                                        </button>
+                                        {confirmDeleteGroupId === group.id ? (
+                                            <div className="flex items-center gap-1 shrink-0 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 px-1 py-0.5 rounded text-[9px]">
+                                                <span className="text-red-650 dark:text-red-400 font-bold mr-0.5 scale-90">Delete?</span>
+                                                <button 
+                                                    onClick={() => {
+                                                        viewerManager?.removePlanningGroup(group.id, true);
+                                                        setConfirmDeleteGroupId(null);
+                                                    }} 
+                                                    className="bg-red-600 text-white font-bold px-1 rounded hover:bg-red-700 transition"
+                                                >
+                                                    Yes
+                                                </button>
+                                                <button 
+                                                    onClick={() => setConfirmDeleteGroupId(null)} 
+                                                    className="bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 px-1 rounded hover:bg-slate-300 dark:hover:bg-slate-705 transition"
+                                                >
+                                                    No
+                                                </button>
+                                            </div>
+                                        ) : (
+                                            <button 
+                                                onClick={() => setConfirmDeleteGroupId(group.id)} 
+                                                className="p-1 text-slate-400 hover:text-red-500 transition"
+                                                title="Delete Group"
+                                            >
+                                                <Trash2 size={12} />
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                                
+                                {!group.isCollapsed && (
+                                    <div className="p-2 flex flex-col gap-2 bg-slate-50/20 dark:bg-slate-950/20">
+                                        {groupObjects.length === 0 ? (
+                                            <div className="text-center text-[10px] text-slate-400 p-2 italic bg-white/40 dark:bg-black/10 rounded border border-dashed border-slate-100 dark:border-slate-800">
+                                                No objects in group. Drag or assign inside options drawer.
+                                            </div>
+                                        ) : (
+                                            groupObjects.map((obj, i) => (
+                                                <PlanningObjectItem key={obj.id} obj={obj} viewerManager={viewerManager} index={i} />
+                                            ))
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+                        );
+                    })}
+
+                    {/* General / Unassigned Objects */}
+                    {(() => {
+                        const unassignedObjects = planningObjects.filter(obj => !obj.groupId || !planningGroups.some(g => g.id === obj.groupId));
+                        if (unassignedObjects.length === 0) return null;
+                        
+                        // Only wrap under general collapsible header if there is at least one custom group
+                        if (planningGroups.length === 0) {
+                            return unassignedObjects.map((obj, i) => (
+                                <PlanningObjectItem key={obj.id} obj={obj} viewerManager={viewerManager} index={i} />
+                            ));
+                        }
+                        
+                        return (
+                            <div className="border border-dashed border-slate-300 dark:border-slate-800 rounded mb-2 overflow-hidden bg-white/50 dark:bg-slate-900/40">
+                                <div className="flex items-center gap-2 px-3 py-2 bg-slate-50/50 dark:bg-slate-950/10 border-b border-dashed border-slate-200 dark:border-slate-800 shadow-xs">
+                                    <FolderOpen size={13} className="text-slate-400 shrink-0" />
+                                    <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex-1">
+                                        General / Unassigned
+                                    </div>
+                                    <span className="text-[9px] font-mono text-slate-400 shrink-0">({unassignedObjects.length})</span>
+                                </div>
+                                <div className="p-2 flex flex-col gap-2">
+                                    {unassignedObjects.map((obj, i) => (
+                                        <PlanningObjectItem key={obj.id} obj={obj} viewerManager={viewerManager} index={i} />
+                                    ))}
+                                </div>
+                            </div>
+                        );
+                    })()}
+                </div>
+            )}
         </div>
       </div>
     </div>
   );
 }
 
+function ScaleSliderRow({ label, value, min, max, step, onChange, isMm = false }: { label: string, value: number, min: number, max: number, step: number, onChange: (v: number) => void, isMm?: boolean }) {
+    return (
+        <div className="flex flex-col gap-1 my-1">
+            <div className="flex justify-between items-center text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                <span>{label}</span>
+                <span className="font-mono text-blue-600 dark:text-blue-400">
+                    {isMm ? `${value.toFixed(1)} mm` : `${(value * 100).toFixed(0)}%`}
+                </span>
+            </div>
+            <input 
+                type="range" 
+                min={min} max={max} step={step}
+                value={value} 
+                onChange={e => onChange(parseFloat(e.target.value))}
+                className="w-full h-1 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500 dark:accent-blue-400 focus:outline-none"
+            />
+        </div>
+    );
+}
+
 function PlanningObjectItem({ obj, viewerManager, index }: { obj: any, viewerManager: any, index: number, key?: any }) {
+  const { planningGroups = [] } = useViewer();
   const [open, setOpen] = useState(false);
-  const [pos, setPos] = useState({ 
-    x: obj.mesh.position.x, 
-    y: obj.mesh.position.y, 
-    z: obj.mesh.position.z 
-  });
-  const [rot, setRot] = useState({ 
-    x: obj.mesh.rotation.x * 180 / Math.PI, 
-    y: obj.mesh.rotation.y * 180 / Math.PI, 
-    z: obj.mesh.rotation.z * 180 / Math.PI 
-  });
+  const itemRef = useRef<HTMLDivElement>(null);
 
-  const updateTransform = (updates: any) => {
-      viewerManager.updatePlanningObjectTransform(obj.id, updates);
-      if (updates.posX !== undefined) setPos(p => ({ ...p, x: updates.posX }));
-      if (updates.posY !== undefined) setPos(p => ({ ...p, y: updates.posY }));
-      if (updates.posZ !== undefined) setPos(p => ({ ...p, z: updates.posZ }));
+  const [planeExtSize, setPlaneExtSize] = useState(obj.extWidth !== undefined ? obj.extWidth : 10);
+  const [planeThickness, setPlaneThickness] = useState(obj.thickness !== undefined ? obj.thickness : 0.0);
+  
+  const [cylinderDiameter, setCylinderDiameter] = useState(obj.diameter !== undefined ? obj.diameter : 1.0);
+  const [cylinderExtension, setCylinderExtension] = useState(obj.extension !== undefined ? obj.extension : 20);
+  
+  const [curveDiameter, setCurveDiameter] = useState(obj.thickness !== undefined ? obj.thickness : 0.2);
 
-      if (updates.rotX !== undefined) setRot(r => ({ ...r, x: updates.rotX }));
-      if (updates.rotY !== undefined) setRot(r => ({ ...r, y: updates.rotY }));
-      if (updates.rotZ !== undefined) setRot(r => ({ ...r, z: updates.rotZ }));
+  useEffect(() => {
+    if (!open) return;
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      if (itemRef.current && !itemRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    
+    const timer = setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('touchstart', handleClickOutside, { passive: true });
+    }, 50);
+
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
+  }, [open]);
+
+  const handlePlaneChange = (extSize?: number, thk?: number) => {
+      const nextExt = extSize !== undefined ? extSize : planeExtSize;
+      const nextThk = thk !== undefined ? thk : planeThickness;
+      viewerManager.updatePlaneGeometry(obj.id, nextExt, nextThk);
+      if (extSize !== undefined) setPlaneExtSize(extSize);
+      if (thk !== undefined) setPlaneThickness(thk);
+  };
+
+  const handleCylinderChange = (dia?: number, ext?: number) => {
+      const nextDia = dia !== undefined ? dia : cylinderDiameter;
+      const nextExt = ext !== undefined ? ext : cylinderExtension;
+      viewerManager.updateCylinderGeometry(obj.id, nextDia, nextExt);
+      if (dia !== undefined) setCylinderDiameter(dia);
+      if (ext !== undefined) setCylinderExtension(ext);
+  };
+
+  const updateCurveDiameter = (val: number) => {
+      viewerManager.updatePlanningObjectCurveThickness(obj.id, val);
+      setCurveDiameter(val);
   };
 
   return (
-      <div className="border border-slate-200 dark:border-slate-800 rounded overflow-hidden">
-          <div className="bg-slate-50 dark:bg-slate-800/50 flex items-center justify-between p-2">
-              <div className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: obj.color }}></div>
-                <div className="flex flex-col">
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      {obj.type.charAt(0).toUpperCase() + obj.type.slice(1)} {index + 1}
-                  </span>
-                  {obj.type === 'cylinder' && obj.baseDistance !== undefined && (
-                      <span className="text-[9px] text-slate-500 font-mono">Distance: {obj.baseDistance.toFixed(2)} mm</span>
-                  )}
-                  {obj.type === 'plane' && obj.width !== undefined && obj.height !== undefined && (
-                      <span className="text-[9px] text-slate-500 font-mono">{obj.width.toFixed(1)} × {obj.height.toFixed(1)} mm</span>
-                  )}
-                  {obj.type === 'curve' && obj.thickness !== undefined && (
-                      <span className="text-[9px] text-slate-500 font-mono">Length: {(obj.baseDistance || 0).toFixed(1)} mm | Thk: {obj.thickness} mm</span>
-                  )}
-                  {obj.type === 'measurement' && obj.baseDistance !== undefined && (
-                      <span className="text-[9px] text-slate-500 font-mono">Dist: {obj.baseDistance.toFixed(2)} mm | Angle: {(obj.angle || 0).toFixed(1)}°</span>
-                  )}
+      <div ref={itemRef} className="border border-slate-200 dark:border-slate-800 rounded overflow-hidden">
+          <div className="bg-slate-50 dark:bg-slate-800 flex items-start gap-2 p-3">
+              <div className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ backgroundColor: obj.color }}></div>
+              <div className="flex flex-col gap-1 w-full flex-1 min-w-0">
                   <input
                       type="text"
-                      className="mt-1 text-[10px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-0.5 text-slate-700 dark:text-slate-300 placeholder-slate-400 focus:outline-none focus:border-blue-500 transition-colors w-full max-w-[140px]"
-                      placeholder="Add text annotation..."
-                      value={obj.annotation || ''}
-                      onChange={(e) => viewerManager.updatePlanningObjectAnnotation(obj.id, e.target.value)}
+                      className="text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/80 rounded px-2 py-1 text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-colors w-full"
+                      placeholder="Edit object name..."
+                      value={obj.name || obj.id}
+                      onChange={(e) => viewerManager.updatePlanningObjectName(obj.id, e.target.value)}
                   />
-                </div>
+                  {obj.type === 'cylinder' && obj.radius !== undefined && (
+                      <span className="text-[9px] text-slate-500 dark:text-slate-400 font-mono mt-0.5 leading-tight">
+                          Dia: {(obj.radius * 2).toFixed(1)} mm | Length: {obj.length.toFixed(1)} mm
+                      </span>
+                  )}
+                  {obj.type === 'plane' && obj.width !== undefined && (
+                      <span className="text-[9px] text-slate-500 dark:text-slate-400 font-mono mt-0.5 leading-tight">
+                          Size: {obj.width.toFixed(1)} × {obj.height.toFixed(1)} mm | Thk: {obj.thickness.toFixed(1)} mm
+                      </span>
+                  )}
+                  {obj.type === 'curve' && obj.thickness !== undefined && (
+                      <span className="text-[9px] text-slate-500 dark:text-slate-400 font-mono mt-0.5 leading-tight">
+                          Length: {(obj.baseDistance || 0).toFixed(1)} mm | Dia: {curveDiameter.toFixed(1)} mm
+                      </span>
+                  )}
+                  {obj.type === 'measurement' && obj.baseDistance !== undefined && (
+                      <span className="text-[9px] text-slate-500 dark:text-slate-400 font-mono mt-0.5 leading-tight">
+                          Dist: {obj.baseDistance.toFixed(2)} mm | Angle: {(obj.angle || 0).toFixed(1)}°
+                      </span>
+                  )}
               </div>
-              <div className="flex items-center gap-1">
-                  <button onClick={() => viewerManager.exportPlanningObjectSTL(obj.id)} className="p-1.5 text-slate-500 hover:text-blue-500 rounded hover:bg-white dark:hover:bg-slate-700 transition" title="Export STL">
+              <div className="flex items-center gap-1 shrink-0 self-center">
+                  <button onClick={() => viewerManager.togglePlanningObjectVisibility(obj.id)} className="p-1.5 text-slate-500 hover:text-blue-500 dark:text-slate-400 dark:hover:text-blue-400 rounded hover:bg-white dark:hover:bg-slate-800 transition" title={obj.visible === false ? "Show Object" : "Hide Object"}>
+                      {obj.visible === false ? <EyeOff size={14} /> : <Eye size={14} />}
+                  </button>
+                  <button onClick={() => viewerManager.exportPlanningObjectSTL(obj.id)} className="p-1.5 text-slate-500 hover:text-blue-500 dark:text-slate-400 dark:hover:text-blue-400 rounded hover:bg-white dark:hover:bg-slate-800 transition" title="Export STL">
                       <Download size={14} />
                   </button>
-                  <button onClick={() => setOpen(!open)} className={`p-1.5 rounded transition ${open ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400' : 'text-slate-500 hover:bg-white dark:hover:bg-slate-700'}`} title="Adjust Transform">
+                  <button onClick={() => setOpen(!open)} className={`p-1.5 rounded transition ${open ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400' : 'text-slate-500 hover:bg-white dark:hover:bg-slate-800'}`} title="Adjust Dimensions">
                       <SlidersHorizontal size={14} />
                   </button>
-                  <button onClick={() => viewerManager.removePlanningObject(obj.id)} className="p-1.5 text-slate-500 hover:text-red-500 rounded hover:bg-white dark:hover:bg-slate-700 transition" title="Delete">
+                  <button onClick={() => viewerManager.removePlanningObject(obj.id)} className="p-1.5 text-slate-500 hover:text-red-500 dark:text-slate-400 dark:hover:text-red-400 rounded hover:bg-white dark:hover:bg-slate-800 transition" title="Delete">
                       <Trash2 size={14} />
                   </button>
               </div>
           </div>
 
           {open && (
-              <div className="p-3 bg-white dark:bg-slate-900 flex flex-col gap-3 border-t border-slate-200 dark:border-slate-800">
-                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Translation</div>
-                  <div className="flex flex-col gap-2">
-                      <SliderRow label="X" value={pos.x} min={-1000} max={1000} onChange={v => updateTransform({ posX: v })}/>
-                      <SliderRow label="Y" value={pos.y} min={-1000} max={1000} onChange={v => updateTransform({ posY: v })}/>
-                      <SliderRow label="Z" value={pos.z} min={-1000} max={1000} onChange={v => updateTransform({ posZ: v })}/>
+              <div className="p-3 bg-white dark:bg-slate-900 flex flex-col gap-4 border-t border-slate-200 dark:border-slate-800">
+                  {/* Group Selector Dropdown */}
+                  <div className="flex flex-col gap-1 rounded bg-slate-50 dark:bg-slate-950/40 p-2 border border-slate-105 dark:border-slate-805">
+                      <label className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest leading-none mb-1">
+                          Group Assignment
+                      </label>
+                      <select 
+                          className="w-full text-xs bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded px-2 py-1.5 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                          value={obj.groupId || ''}
+                          onChange={(e) => {
+                              const val = e.target.value;
+                              if (val === '__create_new__') {
+                                  let name: string | null = null;
+                                  try {
+                                      name = prompt("Enter a name for the new group:");
+                                  } catch (e) {
+                                      console.warn("Prompt blocked in iframe", e);
+                                  }
+                                  if (name === null) {
+                                      return;
+                                  }
+                                  const trimmed = name.trim();
+                                  const finalName = trimmed !== "" ? trimmed : `Group ${planningGroups.length + 1}`;
+                                  const newId = viewerManager.addPlanningGroup(finalName);
+                                  viewerManager.setPlanningObjectGroupId(obj.id, newId);
+                              } else {
+                                  viewerManager.setPlanningObjectGroupId(obj.id, val || undefined);
+                              }
+                          }}
+                      >
+                          <option value="">No Group (Unassigned)</option>
+                          {planningGroups.map((g: any) => (
+                              <option key={g.id} value={g.id}>{g.name}</option>
+                          ))}
+                          <option value="__create_new__" className="text-blue-500 font-semibold">+ Create New Group...</option>
+                      </select>
                   </div>
 
-                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-2">Rotation (Deg)</div>
-                  <div className="flex flex-col gap-2">
-                      <SliderRow label="X" value={rot.x} min={-180} max={180} onChange={v => updateTransform({ rotX: v })}/>
-                      <SliderRow label="Y" value={rot.y} min={-180} max={180} onChange={v => updateTransform({ rotY: v })}/>
-                      <SliderRow label="Z" value={rot.z} min={-180} max={180} onChange={v => updateTransform({ rotZ: v })}/>
-                  </div>
+                  {/* Dynamic absolute mm Sliders section */}
+                  {obj.type === 'plane' && (
+                      <div className="flex flex-col gap-2">
+                          <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Plane Geometry</div>
+                          <ScaleSliderRow 
+                              label="Width & Length Extension" 
+                              value={planeExtSize} 
+                              min={0} 
+                              max={100} 
+                              step={5}
+                              onChange={v => handlePlaneChange(v, undefined)} 
+                              isMm={true}
+                          />
+                          <ScaleSliderRow 
+                              label="Thickness" 
+                              value={planeThickness} 
+                              min={0.0} 
+                              max={1.0} 
+                              step={0.1}
+                              onChange={v => handlePlaneChange(undefined, v)} 
+                              isMm={true}
+                          />
+                      </div>
+                  )}
+
+                  {obj.type === 'cylinder' && (
+                      <div className="flex flex-col gap-2">
+                          <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Cylinder Geometry</div>
+                          <ScaleSliderRow 
+                              label="Diameter" 
+                              value={cylinderDiameter} 
+                              min={0.1} 
+                              max={10.0} 
+                              step={0.1}
+                              onChange={v => handleCylinderChange(v, undefined)} 
+                              isMm={true}
+                          />
+                          <ScaleSliderRow 
+                              label="Extended Length" 
+                              value={cylinderExtension} 
+                              min={0} 
+                              max={100} 
+                              step={5}
+                              onChange={v => handleCylinderChange(undefined, v)} 
+                              isMm={true}
+                          />
+                      </div>
+                  )}
+
+                  {obj.type === 'curve' && (
+                      <div className="flex flex-col gap-2">
+                          <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Curve Geometry</div>
+                          <ScaleSliderRow 
+                              label="Curve Diameter" 
+                              value={curveDiameter} 
+                              min={0.1} 
+                              max={2.0} 
+                              step={0.1}
+                              onChange={v => updateCurveDiameter(v)} 
+                              isMm={true}
+                          />
+                      </div>
+                  )}
               </div>
           )}
       </div>
