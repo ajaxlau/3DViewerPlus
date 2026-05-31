@@ -27,7 +27,7 @@ export function Header({ toggleSidebar }: { toggleSidebar: () => void }) {
           className="h-6 w-auto max-w-[150px] object-contain mix-blend-multiply dark:mix-blend-screen dark:invert dark:hue-rotate-180" 
         />
         <span className="whitespace-nowrap md:text-[14px] text-xs truncate max-w-[200px] md:max-w-none">
-          NTEC 3DPO - 3D Viewer Plus
+          NTEC 3DPO - 3D Viewer<sup>+</sup>
         </span>
       </div>
       
