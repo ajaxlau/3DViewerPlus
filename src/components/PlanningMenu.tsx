@@ -30,24 +30,10 @@ export function PlanningMenu() {
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
-        if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-            setSettingsExpanded(false);
-        }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('touchstart', handleClickOutside, { passive: true });
-    return () => {
-        document.removeEventListener('mousedown', handleClickOutside);
-        document.removeEventListener('touchstart', handleClickOutside);
-    };
-  }, []);
-
-  useEffect(() => {
     setSettingsExpanded(true);
   }, [planningMode]);
 
-  if (activeModal !== 'planning') return null;
+  const collapsed = activeModal !== 'planning';
 
   const handleConfirm = () => {
       viewerManager?.confirmPlanningObject({
@@ -66,17 +52,22 @@ export function PlanningMenu() {
   const canConfirm = (planningMode === 'plane' && planningPointsPicked === 3) || (planningMode === 'cylinder' && planningPointsPicked === 2) || (planningMode === 'measure' && planningPointsPicked === 2) || (planningMode === 'curve' && planningPointsPicked >= 2);
 
   return (
-    <div ref={menuRef} className="absolute right-6 top-[80px] w-80 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl flex flex-col z-50 overflow-hidden">
-      <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900" onClick={() => setSettingsExpanded(true)}>
-        <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100 uppercase tracking-widest flex items-center gap-2">
-           Planning Tools
-        </h3>
-        <button className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200" onClick={() => setActiveModal(null)}>
-          <X size={16} />
-        </button>
-      </div>
+    <aside 
+      className={`transition-all duration-300 bg-white dark:bg-slate-900 flex-col overflow-y-auto overflow-x-hidden shrink-0 z-10 ${
+        collapsed ? 'w-full md:w-0 h-0 md:h-auto opacity-0 border-none pointer-events-none' : 'w-full md:w-[320px] h-auto max-h-[50vh] md:max-h-none md:h-auto border-t md:border-t-0 md:border-l border-slate-200 dark:border-slate-800 flex'
+      }`}
+    >
+      <div className="flex flex-col w-full min-h-min">
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 shrink-0" onClick={() => setSettingsExpanded(true)}>
+          <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100 uppercase tracking-widest flex items-center gap-2">
+             Planning Tools
+          </h3>
+          <button className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200" onClick={() => setActiveModal(null)}>
+            <X size={16} />
+          </button>
+        </div>
 
-      <div className="p-4 flex flex-col gap-4 max-h-[70vh] overflow-y-auto">
+        <div className="p-4 flex flex-col gap-4 overflow-y-auto">
         <div className="flex flex-col gap-2">
             <div className={`flex flex-col rounded border transition-colors ${planningMode === 'measure' ? 'border-emerald-500 bg-emerald-50/5 dark:bg-emerald-950/5' : 'border-slate-200 dark:border-slate-700'}`}>
                 <button 
@@ -426,7 +417,8 @@ export function PlanningMenu() {
             )}
         </div>
       </div>
-    </div>
+      </div>
+    </aside>
   );
 }
 

@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { useViewer } from '../context/ViewerContext';
-import { BoxSelect, Camera } from 'lucide-react';
+import { BoxSelect, Camera, Share2 } from 'lucide-react';
 
 export function ViewerCanvas() {
-  const { setContainerRef, setRulerRefs, isEmpty, rulersVisible, viewerManager, filename } = useViewer();
+  const { setContainerRef, setRulerRefs, isEmpty, rulersVisible, viewerManager, filename, setActiveModal } = useViewer();
   const [isDragging, setIsDragging] = useState(false);
   
   const handleOpenFiles = () => {
@@ -47,19 +47,26 @@ export function ViewerCanvas() {
     };
   }, []);
 
-  const handleQuickSnapshot = () => {
+  const handleQuickSnapshotShare = async () => {
     if (!viewerManager) return;
     try {
       const dataUrl = viewerManager.captureSnapshot(1920, 1080, false);
       if (dataUrl) {
-        const link = document.createElement('a');
-        link.href = dataUrl;
+        const res = await fetch(dataUrl);
+        const blob = await res.blob();
         const dlName = filename || 'snapshot';
-        link.download = `${dlName.replace(/\.[^/.]+$/, "")}_snapshot.png`;
-        link.click();
+        const file = new File([blob], `${dlName.replace(/\.[^/.]+$/, "")}_snapshot.png`, { type: 'image/png' });
+        
+        if (navigator.canShare && navigator.canShare({ files: [file] })) {
+          await navigator.share({
+            files: [file]
+          });
+        } else {
+           setActiveModal('snapshot');
+        }
       }
     } catch (e) {
-      console.warn("Failed to generate quick snapshot", e);
+      console.warn("Failed to share quick snapshot", e);
     }
   };
 
@@ -75,11 +82,14 @@ export function ViewerCanvas() {
       {/* Floating Action Buttons */}
       {!isEmpty && (
         <button
-          onClick={handleQuickSnapshot}
+          onClick={handleQuickSnapshotShare}
           className="absolute bottom-6 right-6 z-20 w-11 h-11 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center shadow-lg transition-all hover:scale-105 active:scale-95 group focus:outline-none focus:ring-2 focus:ring-blue-500/40"
-          title="One-Click Snapshot"
+          title="Share Snapshot"
         >
-          <Camera size={18} className="transition-transform group-hover:rotate-6" />
+          <div className="relative text-white z-10 flex items-center justify-center">
+            <Camera size={18} className="transition-transform group-hover:-rotate-3" />
+            <Share2 size={12} className="absolute -bottom-1 -right-2 transition-transform group-hover:rotate-6 text-blue-200" />
+          </div>
         </button>
       )}
       

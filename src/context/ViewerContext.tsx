@@ -43,6 +43,8 @@ interface ViewerContextState {
   rulersVisible: boolean;
   toggleRulers: () => void;
   
+  isAutoRotating: boolean;
+  setIsAutoRotating: (val: boolean) => void;
   // Modals state
   activeModal: 'url' | 'share' | 'embed' | 'snapshot' | 'planning' | null;
   setActiveModal: (modal: 'url' | 'share' | 'embed' | 'snapshot' | 'planning' | null) => void;
@@ -82,6 +84,7 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
   const [explodeValue, setExplodeValueState] = useState(0);
   const [highlightedMeshId, setHighlightedMeshId] = useState<number | null>(null);
   const [rulersVisible, setRulersVisible] = useState(false);
+  const [isAutoRotating, setIsAutoRotatingState] = useState(false);
   
   const [activeModal, setActiveModal] = useState<ViewerContextState['activeModal']>(null);
   
@@ -201,6 +204,13 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
     if (viewerManager) viewerManager.setExplode(val);
   };
 
+  const setIsAutoRotating = (val: boolean) => {
+    setIsAutoRotatingState(val);
+    if (viewerManager) {
+        viewerManager.setAutoRotate(val);
+    }
+  };
+
   const toggleMeshVisibility = (id: number) => {
     if (viewerManager) viewerManager.toggleMeshVisibility(id);
     setMeshes(prev => prev.map(m => m.id === id ? { ...m, visible: !m.visible } : m));
@@ -228,7 +238,7 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
       globalOpacity, setGlobalOpacity, isClipping, setIsClipping,
       clipPlanes, updateClipPlane, explodeValue, setExplodeValue,
       toggleMeshVisibility, setMeshOpacity, highlightMesh, highlightedMeshId,
-      rulersVisible, toggleRulers, activeModal, setActiveModal,
+      rulersVisible, toggleRulers, isAutoRotating, setIsAutoRotating, activeModal, setActiveModal,
       planningMode, setPlanningMode, planningObjects, setPlanningObjects, planningPointsPicked,
       planningGroups, setPlanningGroups,
       measurement,

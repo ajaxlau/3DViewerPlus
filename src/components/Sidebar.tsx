@@ -7,7 +7,7 @@ export function Sidebar({ collapsed }: { collapsed: boolean }) {
     status, filename, meshes, globalOpacity, setGlobalOpacity, 
     toggleMeshVisibility, setMeshOpacity, highlightMesh, highlightedMeshId,
     isClipping, setIsClipping, clipPlanes, updateClipPlane,
-    explodeValue, setExplodeValue, isEmpty
+    explodeValue, setExplodeValue, isEmpty, isAutoRotating, setIsAutoRotating
   } = useViewer();
 
   const [meshVisOpen, setMeshVisOpen] = useState(true);
@@ -154,6 +154,16 @@ export function Sidebar({ collapsed }: { collapsed: boolean }) {
                 onChange={(e) => setExplodeValue(parseFloat(e.target.value))}
                 className="w-full cursor-pointer" 
               />
+            </div>
+            
+            <div className="border-l-2 border-emerald-500 pl-3">
+              <div className="flex justify-between items-center">
+                <label className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-widest font-semibold cursor-pointer" onClick={() => setIsAutoRotating(!isAutoRotating)}>Auto-Rotate</label>
+                <label className="switch mb-0">
+                  <input type="checkbox" checked={isAutoRotating} onChange={(e) => setIsAutoRotating(e.target.checked)} />
+                  <span className="slider"></span>
+                </label>
+              </div>
             </div>
           </div>
         )}

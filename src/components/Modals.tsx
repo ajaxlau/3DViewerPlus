@@ -127,8 +127,7 @@ export function Modals() {
       
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({
-          files: [file],
-          title: '3D Model Snapshot'
+          files: [file]
         });
       } else {
         // Fallback for desktops: download the image and redirect to WhatsApp Web
@@ -137,7 +136,7 @@ export function Modals() {
         link.download = file.name;
         link.click();
         
-        const url = `https://wa.me/?text=`;
+        const url = `https://wa.me/`;
         window.open(url, '_blank');
       }
     } catch (e) {
@@ -225,14 +224,13 @@ export function Modals() {
 
       if (navigator.canShare && navigator.canShare({ files })) {
         await navigator.share({
-          files,
-          title: `360 Views - ${dlBaseName}`
+          files
         });
         setActiveModal(null);
       } else {
         setShareFeedback("Multiple file-sharing not fully supported. Downloading views separately and opening WhatsApp link...");
         await handleDownloadAll360Individual();
-        const url = `https://wa.me/?text=`;
+        const url = `https://wa.me/`;
         window.open(url, '_blank');
       }
     } catch (err) {

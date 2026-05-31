@@ -44,6 +44,7 @@ export class ViewerManager {
   topRulerRef: HTMLCanvasElement | null = null;
   leftRulerRef: HTMLCanvasElement | null = null;
   rulersVisible: boolean = false;
+  isAutoRotating: boolean = false;
   rulerAnimationFrame: any = null;
   lastCameraState: string = '';
 
@@ -1842,6 +1843,10 @@ These files are ready to be aligned directly back into standard engineering and 
   }
 
 
+  setAutoRotate(val: boolean) {
+      this.isAutoRotating = val;
+  }
+
   // --- RULERS ---
   
   setRulersVisible(val: boolean) {
@@ -1868,6 +1873,45 @@ These files are ready to be aligned directly back into standard engineering and 
   domUpdateLoop = () => {
     try {
         if (this.viewer?.viewer?.navigation) {
+            
+            if (this.isAutoRotating && window.THREE) {
+                const nav = this.viewer.viewer.navigation;
+                let originalCam: any = null;
+                if (typeof nav.GetCamera === 'function') {
+                    originalCam = nav.GetCamera();
+                } else if (nav.camera) {
+                    const threeCam = nav.camera;
+                    originalCam = new window.OV.Camera(
+                        new window.OV.Coord3D(threeCam.position.x, threeCam.position.y, threeCam.position.z),
+                        new window.OV.Coord3D(nav.controls?.target?.x || 0, nav.controls?.target?.y || 0, nav.controls?.target?.z || 0),
+                        new window.OV.Coord3D(threeCam.up.x, threeCam.up.y, threeCam.up.z),
+                        threeCam.fov || 45.0
+                    );
+                }
+                
+                if (originalCam && originalCam.eye && originalCam.center && originalCam.up) {
+                    const eye = originalCam.eye;
+                    const center = originalCam.center;
+                    const up = originalCam.up;
+
+                    const offset = new window.THREE.Vector3(eye.x - center.x, eye.y - center.y, eye.z - center.z);
+                    const upVec = new window.THREE.Vector3(up.x, up.y, up.z).normalize();
+                    const angleRad = 0.005; // Adjust speed as needed
+                    offset.applyAxisAngle(upVec, angleRad);
+                    
+                    const newEye = new window.THREE.Vector3(center.x, center.y, center.z).add(offset);
+                    
+                    const tempCam = new window.OV.Camera(
+                        new window.OV.Coord3D(newEye.x, newEye.y, newEye.z),
+                        new window.OV.Coord3D(center.x, center.y, center.z),
+                        new window.OV.Coord3D(up.x, up.y, up.z),
+                        originalCam.fov || 45.0
+                    );
+                    nav.SetCamera(tempCam);
+                    this.viewer.viewer.Render();
+                }
+            }
+
             // Update Planning Object Overlays
             if (this.planningObjects) {
                 this.planningObjects.forEach(obj => {

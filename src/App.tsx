@@ -14,10 +14,22 @@ declare global {
 }
 
 function MainLayout() {
-  const { viewerManager } = useViewer();
+  const { viewerManager, activeModal } = useViewer();
   const [sidebarCollapsed, setSidebarCollapsed] = useState(
     window.innerWidth <= 900 || typeof navigator !== 'undefined' && /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
   );
+
+  useEffect(() => {
+    let timer1 = setTimeout(() => {
+      if (viewerManager && viewerManager.viewer) viewerManager.viewer.Resize();
+      if (viewerManager && viewerManager.rulersVisible) viewerManager.resizeRulers();
+    }, 10);
+    let timer2 = setTimeout(() => {
+      if (viewerManager && viewerManager.viewer) viewerManager.viewer.Resize();
+      if (viewerManager && viewerManager.rulersVisible) viewerManager.resizeRulers();
+    }, 300);
+    return () => { clearTimeout(timer1); clearTimeout(timer2); };
+  }, [viewerManager, activeModal]);
 
   useEffect(() => {
     if (viewerManager) {
@@ -62,10 +74,10 @@ function MainLayout() {
         <div className="flex flex-1 min-h-0 relative flex-col md:flex-row">
           <Sidebar collapsed={sidebarCollapsed} />
           <ViewerCanvas />
+          <PlanningMenu />
         </div>
       </div>
       <Modals />
-      <PlanningMenu />
     </div>
   );
 }
