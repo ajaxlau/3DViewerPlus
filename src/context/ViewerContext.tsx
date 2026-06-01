@@ -8,12 +8,6 @@ export interface MeshInfo {
   opacity: number;
 }
 
-interface CameraState {
-  eye: number[];
-  center: number[];
-  up: number[];
-}
-
 interface ViewerContextState {
   viewerManager: ViewerManager | null;
   theme: 'light' | 'dark';
@@ -29,8 +23,8 @@ interface ViewerContextState {
   
   isClipping: boolean;
   setIsClipping: (val: boolean) => void;
-  clipPlanes: Record<'x'|'y'|'z', { active: boolean, invert: boolean, sliderVal: number }>;
-  updateClipPlane: (axis: 'x'|'y'|'z', updates: Partial<{ active: boolean, invert: boolean, sliderVal: number }>) => void;
+  clipPlanes: Record<'x'|'y'|'z', { active: boolean, invert: boolean, sliderVal: number, alignToCamera?: boolean }>;
+  updateClipPlane: (axis: 'x'|'y'|'z', updates: Partial<{ active: boolean, invert: boolean, sliderVal: number, alignToCamera?: boolean }>) => void;
   
   explodeValue: number;
   setExplodeValue: (val: number) => void;
@@ -191,7 +185,7 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
     if (viewerManager) viewerManager.setClippingActive(val, clipPlanes);
   };
 
-  const updateClipPlane = (axis: 'x'|'y'|'z', updates: Partial<{ active: boolean, invert: boolean, sliderVal: number }>) => {
+  const updateClipPlane = (axis: 'x'|'y'|'z', updates: Partial<{ active: boolean, invert: boolean, sliderVal: number, alignToCamera?: boolean }>) => {
     setClipPlanes(prev => {
       const newPlanes = { ...prev, [axis]: { ...prev[axis], ...updates } };
       if (viewerManager && isClipping) viewerManager.updateClippingPlanes(newPlanes);

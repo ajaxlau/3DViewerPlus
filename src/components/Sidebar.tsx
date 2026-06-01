@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useViewer } from '../context/ViewerContext';
-import { ChevronDown, Loader2, Eye, EyeOff, Droplets } from 'lucide-react';
+import { ChevronDown, Loader2, Eye, EyeOff, Droplets, Camera } from 'lucide-react';
 
 export function Sidebar({ collapsed }: { collapsed: boolean }) {
   const { 
@@ -199,8 +199,15 @@ function ClipControl({
         min="0" max="100" step="1" 
         value={config.sliderVal} 
         onChange={(e) => onChange(axis, { sliderVal: parseFloat(e.target.value) })}
-        className="flex-1 cursor-pointer" 
+        className="flex-1 cursor-pointer w-16" 
       />
+      <button 
+        className={`px-1.5 h-[24px] flex items-center justify-center rounded border transition-colors ${config.alignToCamera ? 'bg-blue-600 text-white border-blue-600' : 'bg-transparent text-slate-600 dark:text-slate-300 border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+        onClick={() => onChange(axis, { alignToCamera: !config.alignToCamera })}
+        title="Align to Camera View"
+      >
+        <Camera size={13} />
+      </button>
       <button 
         className="px-2 h-[24px] flex items-center justify-center text-[10px] font-semibold uppercase tracking-wider rounded border border-slate-300 dark:border-slate-600 bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
         onClick={() => onChange(axis, { invert: !config.invert })}

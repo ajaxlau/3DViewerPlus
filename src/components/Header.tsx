@@ -2,21 +2,9 @@ import { Menu, Link, Share2, Code, Camera, Ruler, Moon, Sun, PenTool } from 'luc
 import { useViewer } from '../context/ViewerContext';
 
 export function Header({ toggleSidebar }: { toggleSidebar: () => void }) {
-  const { theme, setTheme, activeModal, setActiveModal, toggleRulers, rulersVisible, viewerManager, isEmpty } = useViewer();
+  const { theme, setTheme, activeModal, setActiveModal, toggleRulers, rulersVisible } = useViewer();
 
-  // Create a hidden file input programmatically to trigger load
-  const handleOpenFiles = () => {
-    const input = document.createElement('input');
-    input.type = 'file';
-    input.multiple = true;
-    input.onchange = (e) => {
-      const files = (e.target as HTMLInputElement).files;
-      if (files && files.length > 0 && window._viewerManagerInstance) {
-        window._viewerManagerInstance.loadFiles(files);
-      }
-    };
-    input.click();
-  };
+
 
   return (
     <header className="h-[64px] bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6 z-10 shrink-0 md:h-[64px] h-auto py-2 md:py-0 flex-col md:flex-row gap-3 md:gap-0">

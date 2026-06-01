@@ -1,5 +1,5 @@
 import { useViewer } from '../context/ViewerContext';
-import { X, SlidersHorizontal, Download, Trash2, Crosshair, BoxSelect, Ruler, Plus, Spline, Eye, EyeOff, Folder, FolderPlus, ChevronDown, ChevronRight, FolderOpen } from 'lucide-react';
+import { X, SlidersHorizontal, Download, Trash2, Crosshair, BoxSelect, Ruler, Plus, Spline, Eye, EyeOff, Folder, FolderPlus, ChevronDown, ChevronRight, FolderOpen, Copy, Upload, Save, GripHorizontal } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 
 export function PlanningMenu() {
@@ -11,27 +11,23 @@ export function PlanningMenu() {
   } = useViewer();
 
   // Settings
-  const [planeExtWidth, setPlaneExtWidth] = useState(10);
-  const [planeExtLength, setPlaneExtLength] = useState(10);
-  const [cylinderDiameter, setCylinderDiameter] = useState(1);
-  const [cylinderExtension, setCylinderExtension] = useState(20);
-  const [curveThickness, setCurveThickness] = useState(0.2);
+  const [planeExtWidth] = useState(10);
+  const [planeExtLength] = useState(10);
+  const [cylinderDiameter] = useState(1);
+  const [cylinderExtension] = useState(20);
+  const [curveThickness] = useState(0.2);
 
   const [newGroupName, setNewGroupName] = useState('');
   const [confirmDeleteGroupId, setConfirmDeleteGroupId] = useState<string | null>(null);
+  const [confirmClearAll, setConfirmClearAll] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   const handleCreateGroup = () => {
-    if (!newGroupName.trim() || !viewerManager) return;
-    viewerManager.addPlanningGroup(newGroupName.trim());
+    if (!viewerManager) return;
+    const name = newGroupName.trim() || `Group ${viewerManager.planningGroups.length + 1}`;
+    viewerManager.addPlanningGroup(name);
     setNewGroupName('');
   };
-
-  const [settingsExpanded, setSettingsExpanded] = useState(true);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    setSettingsExpanded(true);
-  }, [planningMode]);
 
   const collapsed = activeModal !== 'planning';
 
@@ -58,7 +54,7 @@ export function PlanningMenu() {
       }`}
     >
       <div className="flex flex-col w-full min-h-min">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 shrink-0" onClick={() => setSettingsExpanded(true)}>
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 shrink-0">
           <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100 uppercase tracking-widest flex items-center gap-2">
              Planning Tools
           </h3>
@@ -71,7 +67,7 @@ export function PlanningMenu() {
         <div className="flex flex-col gap-2">
             <div className={`flex flex-col rounded border transition-colors ${planningMode === 'measure' ? 'border-emerald-500 bg-emerald-50/5 dark:bg-emerald-950/5' : 'border-slate-200 dark:border-slate-700'}`}>
                 <button 
-                    onClick={() => { setPlanningMode(planningMode === 'measure' ? 'none' : 'measure'); setSettingsExpanded(true); }}
+                    onClick={() => { setPlanningMode(planningMode === 'measure' ? 'none' : 'measure'); }}
                     className={`flex items-center p-3 text-xs font-semibold uppercase tracking-wider transition-colors w-full text-left ${
                         planningMode === 'measure' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-t' : 'bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded'
                     }`}
@@ -120,7 +116,7 @@ export function PlanningMenu() {
                     planningMode === 'plane' ? 'bg-blue-50 dark:bg-blue-900/20 rounded-t' : 'bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded'
                 }`}>
                     <button 
-                        onClick={() => { setPlanningMode(planningMode === 'plane' ? 'none' : 'plane'); setSettingsExpanded(true); }}
+                        onClick={() => { setPlanningMode(planningMode === 'plane' ? 'none' : 'plane'); }}
                         className={`flex-1 flex items-center p-3 text-xs font-semibold uppercase tracking-wider text-left ${planningMode === 'plane' ? 'text-blue-600 dark:text-blue-400' : ''}`}
                     >
                         <BoxSelect size={18} className="mr-3 shrink-0" />
@@ -131,7 +127,7 @@ export function PlanningMenu() {
                     </button>
                     {planningMode === 'plane' && (
                         <button
-                            onClick={(e) => { e.stopPropagation(); setPlanningMode('plane'); setSettingsExpanded(true); }}
+                            onClick={(e) => { e.stopPropagation(); setPlanningMode('plane'); }}
                             className="p-3 text-blue-500 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 transition-colors"
                             title="Start New Plane"
                         >
@@ -165,7 +161,7 @@ export function PlanningMenu() {
                     planningMode === 'cylinder' ? 'bg-amber-50 dark:bg-amber-900/20 rounded-t' : 'bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded'
                 }`}>
                     <button 
-                        onClick={() => { setPlanningMode(planningMode === 'cylinder' ? 'none' : 'cylinder'); setSettingsExpanded(true); }}
+                        onClick={() => { setPlanningMode(planningMode === 'cylinder' ? 'none' : 'cylinder'); }}
                         className={`flex-1 flex items-center p-3 text-xs font-semibold uppercase tracking-wider text-left ${planningMode === 'cylinder' ? 'text-amber-600 dark:text-amber-400' : ''}`}
                     >
                         <Crosshair size={18} className="mr-3 shrink-0" />
@@ -176,7 +172,7 @@ export function PlanningMenu() {
                     </button>
                     {planningMode === 'cylinder' && (
                         <button
-                            onClick={(e) => { e.stopPropagation(); setPlanningMode('cylinder'); setSettingsExpanded(true); }}
+                            onClick={(e) => { e.stopPropagation(); setPlanningMode('cylinder'); }}
                             className="p-3 text-amber-500 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300 transition-colors"
                             title="Start New Cylinder"
                         >
@@ -209,7 +205,7 @@ export function PlanningMenu() {
                     planningMode === 'curve' ? 'bg-pink-50 dark:bg-pink-900/20 rounded-t' : 'bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded'
                 }`}>
                     <button 
-                        onClick={() => { setPlanningMode(planningMode === 'curve' ? 'none' : 'curve'); setSettingsExpanded(true); }}
+                        onClick={() => { setPlanningMode(planningMode === 'curve' ? 'none' : 'curve'); }}
                         className={`flex-1 flex items-center p-3 text-xs font-semibold uppercase tracking-wider text-left ${planningMode === 'curve' ? 'text-pink-600 dark:text-pink-400' : ''}`}
                     >
                         <Spline size={18} className="mr-3 shrink-0" />
@@ -220,7 +216,7 @@ export function PlanningMenu() {
                     </button>
                     {planningMode === 'curve' && (
                         <button
-                            onClick={(e) => { e.stopPropagation(); setPlanningMode('curve'); setSettingsExpanded(true); }}
+                            onClick={(e) => { e.stopPropagation(); setPlanningMode('curve'); }}
                             className="p-3 text-pink-500 hover:text-pink-700 dark:text-pink-400 dark:hover:text-pink-300 transition-colors"
                             title="Start New Curve"
                         >
@@ -253,20 +249,64 @@ export function PlanningMenu() {
 
         <div className="border-t border-slate-200 dark:border-slate-800 pt-4 mt-2">
             <div className="flex items-center justify-between mb-3">
-                <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Created Objects</h4>
+                <div className="flex items-center gap-2">
+                    <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Created Objects</h4>
+                    <button 
+                        onClick={() => fileInputRef.current?.click()} 
+                        className="p-1 text-slate-400 hover:text-blue-500 transition"
+                        title="Open Project"
+                    >
+                        <FolderOpen size={13} />
+                    </button>
+                    <input 
+                        type="file" 
+                        accept=".zip"
+                        ref={fileInputRef}
+                        className="hidden"
+                        onChange={(e) => {
+                            const file = e.target.files?.[0];
+                            if (file) {
+                                viewerManager?.importPlanningObjectsZip(file);
+                            }
+                            // Reset input
+                            if (fileInputRef.current) fileInputRef.current.value = '';
+                        }}
+                    />
+                </div>
                 {planningObjects.length > 0 && (
                     <div className="flex items-center gap-3">
-                        <button 
-                            onClick={() => viewerManager?.clearAllPlanningObjects()} 
-                            className="text-[10px] flex items-center gap-1 font-bold text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 uppercase tracking-wider transition"
-                            title="Clear all created objects"
-                        >
-                            <Trash2 size={12} />
-                            Reset
-                        </button>
-                        <button onClick={() => viewerManager?.exportAllPlanningObjectsZip()} className="text-[10px] flex items-center gap-1 font-bold text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 uppercase tracking-wider transition">
-                            <Download size={12} />
-                            Export All
+                        {confirmClearAll ? (
+                            <div className="flex items-center gap-1 shrink-0 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 px-1 py-0.5 rounded text-[9px]">
+                                <span className="text-red-500 dark:text-red-400 font-bold mr-0.5 scale-90 uppercase tracking-wider">Reset All?</span>
+                                <button 
+                                    onClick={() => {
+                                        viewerManager?.clearAllPlanningObjects();
+                                        setConfirmClearAll(false);
+                                    }}
+                                    className="p-0.5 text-white bg-red-500 hover:bg-red-600 rounded transition"
+                                >
+                                    <X size={10} className="rotate-45" />
+                                </button>
+                                <button 
+                                    onClick={() => setConfirmClearAll(false)}
+                                    className="p-0.5 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 bg-slate-200 dark:bg-slate-800 rounded transition"
+                                >
+                                    <X size={10} />
+                                </button>
+                            </div>
+                        ) : (
+                            <button 
+                                onClick={() => setConfirmClearAll(true)} 
+                                className="text-[10px] flex items-center gap-1 font-bold text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 uppercase tracking-wider transition"
+                                title="Clear all created objects"
+                            >
+                                <Trash2 size={12} />
+                                Reset
+                            </button>
+                        )}
+                        <button onClick={() => viewerManager?.exportAllPlanningObjectsZip()} className="text-[10px] flex items-center gap-1 font-bold text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 uppercase tracking-wider transition" title="Save Planning">
+                            <Save size={12} />
+                            Save
                         </button>
                     </div>
                 )}
@@ -306,7 +346,18 @@ export function PlanningMenu() {
                     {planningGroups.map(group => {
                         const groupObjects = planningObjects.filter(obj => obj.groupId === group.id);
                         return (
-                            <div key={group.id} className="border border-slate-250 dark:border-slate-800 rounded mb-2 overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
+                            <div 
+                                key={group.id} 
+                                className="border border-slate-250 dark:border-slate-800 rounded mb-2 overflow-hidden bg-white dark:bg-slate-900 shadow-sm"
+                                onDragOver={(e) => e.preventDefault()}
+                                onDrop={(e) => {
+                                    e.preventDefault();
+                                    const draggedId = e.dataTransfer.getData('text/plain');
+                                    if (draggedId && viewerManager) {
+                                        viewerManager.setPlanningObjectGroupId(draggedId, group.id);
+                                    }
+                                }}
+                            >
                                 <div className="flex items-center gap-1 bg-slate-100/50 dark:bg-slate-800/60 px-2 py-1.5 border-b border-slate-200 dark:border-slate-800 justify-between">
                                     <div className="flex items-center gap-1.5 flex-1 min-w-0">
                                         <button 
@@ -329,6 +380,13 @@ export function PlanningMenu() {
                                     </div>
                                     
                                     <div className="flex items-center gap-0.5 shrink-0">
+                                        <button 
+                                            onClick={() => viewerManager?.exportPlanningGroupZip(group.id)} 
+                                            className="p-1 text-slate-400 hover:text-emerald-500 dark:text-slate-500 dark:hover:text-emerald-400 transition"
+                                            title="Save Planning"
+                                        >
+                                            <Save size={13} />
+                                        </button>
                                         <button 
                                             onClick={() => viewerManager?.setPlanningGroupVisibility(group.id, group.visible === false)} 
                                             className="p-1 text-slate-400 hover:text-blue-500 dark:text-slate-500 dark:hover:text-blue-400 transition"
@@ -374,8 +432,8 @@ export function PlanningMenu() {
                                                 No objects in group. Drag or assign inside options drawer.
                                             </div>
                                         ) : (
-                                            groupObjects.map((obj, i) => (
-                                                <PlanningObjectItem key={obj.id} obj={obj} viewerManager={viewerManager} index={i} />
+                                            groupObjects.map((obj) => (
+                                                <PlanningObjectItem key={obj.id} obj={obj} viewerManager={viewerManager} />
                                             ))
                                         )}
                                     </div>
@@ -391,13 +449,23 @@ export function PlanningMenu() {
                         
                         // Only wrap under general collapsible header if there is at least one custom group
                         if (planningGroups.length === 0) {
-                            return unassignedObjects.map((obj, i) => (
-                                <PlanningObjectItem key={obj.id} obj={obj} viewerManager={viewerManager} index={i} />
+                            return unassignedObjects.map((obj) => (
+                                <PlanningObjectItem key={obj.id} obj={obj} viewerManager={viewerManager} />
                             ));
                         }
                         
                         return (
-                            <div className="border border-dashed border-slate-300 dark:border-slate-800 rounded mb-2 overflow-hidden bg-white/50 dark:bg-slate-900/40">
+                            <div 
+                                className="border border-dashed border-slate-300 dark:border-slate-800 rounded mb-2 overflow-hidden bg-white/50 dark:bg-slate-900/40"
+                                onDragOver={(e) => e.preventDefault()}
+                                onDrop={(e) => {
+                                    e.preventDefault();
+                                    const draggedId = e.dataTransfer.getData('text/plain');
+                                    if (draggedId && viewerManager) {
+                                        viewerManager.setPlanningObjectGroupId(draggedId, undefined);
+                                    }
+                                }}
+                            >
                                 <div className="flex items-center gap-2 px-3 py-2 bg-slate-50/50 dark:bg-slate-950/10 border-b border-dashed border-slate-200 dark:border-slate-800 shadow-xs">
                                     <FolderOpen size={13} className="text-slate-400 shrink-0" />
                                     <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider flex-1">
@@ -406,8 +474,8 @@ export function PlanningMenu() {
                                     <span className="text-[9px] font-mono text-slate-400 shrink-0">({unassignedObjects.length})</span>
                                 </div>
                                 <div className="p-2 flex flex-col gap-2">
-                                    {unassignedObjects.map((obj, i) => (
-                                        <PlanningObjectItem key={obj.id} obj={obj} viewerManager={viewerManager} index={i} />
+                                    {unassignedObjects.map((obj) => (
+                                        <PlanningObjectItem key={obj.id} obj={obj} viewerManager={viewerManager} />
                                     ))}
                                 </div>
                             </div>
@@ -442,7 +510,7 @@ function ScaleSliderRow({ label, value, min, max, step, onChange, isMm = false }
     );
 }
 
-function PlanningObjectItem({ obj, viewerManager, index }: { obj: any, viewerManager: any, index: number, key?: any }) {
+function PlanningObjectItem({ obj, viewerManager }: { obj: any, viewerManager: any, key?: any }) {
   const { planningGroups = [] } = useViewer();
   const [open, setOpen] = useState(false);
   const itemRef = useRef<HTMLDivElement>(null);
@@ -497,47 +565,66 @@ function PlanningObjectItem({ obj, viewerManager, index }: { obj: any, viewerMan
   };
 
   return (
-      <div ref={itemRef} className="border border-slate-200 dark:border-slate-800 rounded overflow-hidden">
-          <div className="bg-slate-50 dark:bg-slate-800 flex items-start gap-2 p-3">
-              <div className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ backgroundColor: obj.color }}></div>
-              <div className="flex flex-col gap-1 w-full flex-1 min-w-0">
+      <div 
+        ref={itemRef} 
+        draggable
+        onDragStart={(e) => {
+            e.dataTransfer.setData('text/plain', obj.id);
+            e.dataTransfer.effectAllowed = 'move';
+        }}
+        className="border border-slate-200 dark:border-slate-800 rounded overflow-hidden cursor-grab active:cursor-grabbing group/item"
+      >
+          <div className="bg-slate-50 dark:bg-slate-800 flex flex-col p-2 gap-1.5 relative">
+              <div 
+                  className="absolute top-1 right-1 text-slate-300 dark:text-slate-600 opacity-50 group-hover/item:opacity-100 transition-opacity"
+                  title="Drag to rearrange"
+              >
+                  <GripHorizontal size={14} />
+              </div>
+              <div className="flex flex-col gap-0 w-full min-w-0 pr-4">
                   <input
                       type="text"
-                      className="text-xs font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/80 rounded px-2 py-1 text-slate-800 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500/30 transition-colors w-full"
+                      className="text-[12px] font-bold bg-transparent border-none focus:bg-white dark:focus:bg-slate-950 focus:ring-1 focus:ring-blue-500 rounded px-1.5 py-0.5 w-full flex-1 min-w-0 placeholder-slate-400"
+                      style={{ color: obj.color, textShadow: '0 0 1px rgba(0,0,0,0.1)' }}
                       placeholder="Edit object name..."
                       value={obj.name || obj.id}
                       onChange={(e) => viewerManager.updatePlanningObjectName(obj.id, e.target.value)}
                   />
+                  <div className="px-1.5 leading-tight mt-0.5 text-slate-800 dark:text-slate-300">
                   {obj.type === 'cylinder' && obj.radius !== undefined && (
-                      <span className="text-[9px] text-slate-500 dark:text-slate-400 font-mono mt-0.5 leading-tight">
-                          Dia: {(obj.radius * 2).toFixed(1)} mm | Length: {obj.length.toFixed(1)} mm
+                      <span className="text-[11px] font-mono leading-tight">
+                          Dia: {(obj.radius * 2).toFixed(1)} mm | Len: {obj.length.toFixed(1)} mm
                       </span>
                   )}
                   {obj.type === 'plane' && obj.width !== undefined && (
-                      <span className="text-[9px] text-slate-500 dark:text-slate-400 font-mono mt-0.5 leading-tight">
+                      <span className="text-[11px] font-mono leading-tight">
                           Size: {obj.width.toFixed(1)} × {obj.height.toFixed(1)} mm | Thk: {obj.thickness.toFixed(1)} mm
                       </span>
                   )}
                   {obj.type === 'curve' && obj.thickness !== undefined && (
-                      <span className="text-[9px] text-slate-500 dark:text-slate-400 font-mono mt-0.5 leading-tight">
-                          Length: {(obj.baseDistance || 0).toFixed(1)} mm | Dia: {curveDiameter.toFixed(1)} mm
+                      <span className="text-[11px] font-mono leading-tight">
+                          Len: {(obj.baseDistance || 0).toFixed(1)} mm | Dia: {curveDiameter.toFixed(1)} mm
                       </span>
                   )}
                   {obj.type === 'measurement' && obj.baseDistance !== undefined && (
-                      <span className="text-[9px] text-slate-500 dark:text-slate-400 font-mono mt-0.5 leading-tight">
+                      <span className="text-[11px] font-mono leading-tight">
                           Dist: {obj.baseDistance.toFixed(2)} mm | Angle: {(obj.angle || 0).toFixed(1)}°
                       </span>
                   )}
+                  </div>
               </div>
-              <div className="flex items-center gap-1 shrink-0 self-center">
+              <div className="flex items-center gap-0.5 shrink-0 self-end w-full px-1 justify-end">
+                  <button onClick={() => setOpen(!open)} className={`p-1.5 rounded transition ${open ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400' : 'text-slate-500 hover:bg-white dark:hover:bg-slate-800'}`} title="Adjust Dimensions">
+                      <SlidersHorizontal size={14} />
+                  </button>
+                  <button onClick={() => viewerManager.duplicatePlanningObject(obj.id)} className="p-1.5 text-slate-500 hover:text-blue-500 dark:text-slate-400 dark:hover:text-blue-400 rounded hover:bg-white dark:hover:bg-slate-800 transition" title="Duplicate Object">
+                      <Copy size={14} />
+                  </button>
                   <button onClick={() => viewerManager.togglePlanningObjectVisibility(obj.id)} className="p-1.5 text-slate-500 hover:text-blue-500 dark:text-slate-400 dark:hover:text-blue-400 rounded hover:bg-white dark:hover:bg-slate-800 transition" title={obj.visible === false ? "Show Object" : "Hide Object"}>
                       {obj.visible === false ? <EyeOff size={14} /> : <Eye size={14} />}
                   </button>
-                  <button onClick={() => viewerManager.exportPlanningObjectSTL(obj.id)} className="p-1.5 text-slate-500 hover:text-blue-500 dark:text-slate-400 dark:hover:text-blue-400 rounded hover:bg-white dark:hover:bg-slate-800 transition" title="Export STL">
+                  <button onClick={() => viewerManager.exportPlanningObjectSTL(obj.id)} className="p-1.5 text-slate-500 hover:text-blue-500 dark:text-slate-400 dark:hover:text-blue-400 rounded hover:bg-white dark:hover:bg-slate-800 transition" title="Download STL">
                       <Download size={14} />
-                  </button>
-                  <button onClick={() => setOpen(!open)} className={`p-1.5 rounded transition ${open ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400' : 'text-slate-500 hover:bg-white dark:hover:bg-slate-800'}`} title="Adjust Dimensions">
-                      <SlidersHorizontal size={14} />
                   </button>
                   <button onClick={() => viewerManager.removePlanningObject(obj.id)} className="p-1.5 text-slate-500 hover:text-red-500 dark:text-slate-400 dark:hover:text-red-400 rounded hover:bg-white dark:hover:bg-slate-800 transition" title="Delete">
                       <Trash2 size={14} />
@@ -547,42 +634,6 @@ function PlanningObjectItem({ obj, viewerManager, index }: { obj: any, viewerMan
 
           {open && (
               <div className="p-3 bg-white dark:bg-slate-900 flex flex-col gap-4 border-t border-slate-200 dark:border-slate-800">
-                  {/* Group Selector Dropdown */}
-                  <div className="flex flex-col gap-1 rounded bg-slate-50 dark:bg-slate-950/40 p-2 border border-slate-105 dark:border-slate-805">
-                      <label className="text-[9px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest leading-none mb-1">
-                          Group Assignment
-                      </label>
-                      <select 
-                          className="w-full text-xs bg-white dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded px-2 py-1.5 text-slate-700 dark:text-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500"
-                          value={obj.groupId || ''}
-                          onChange={(e) => {
-                              const val = e.target.value;
-                              if (val === '__create_new__') {
-                                  let name: string | null = null;
-                                  try {
-                                      name = prompt("Enter a name for the new group:");
-                                  } catch (e) {
-                                      console.warn("Prompt blocked in iframe", e);
-                                  }
-                                  if (name === null) {
-                                      return;
-                                  }
-                                  const trimmed = name.trim();
-                                  const finalName = trimmed !== "" ? trimmed : `Group ${planningGroups.length + 1}`;
-                                  const newId = viewerManager.addPlanningGroup(finalName);
-                                  viewerManager.setPlanningObjectGroupId(obj.id, newId);
-                              } else {
-                                  viewerManager.setPlanningObjectGroupId(obj.id, val || undefined);
-                              }
-                          }}
-                      >
-                          <option value="">No Group (Unassigned)</option>
-                          {planningGroups.map((g: any) => (
-                              <option key={g.id} value={g.id}>{g.name}</option>
-                          ))}
-                          <option value="__create_new__" className="text-blue-500 font-semibold">+ Create New Group...</option>
-                      </select>
-                  </div>
 
                   {/* Dynamic absolute mm Sliders section */}
                   {obj.type === 'plane' && (
@@ -651,26 +702,5 @@ function PlanningObjectItem({ obj, viewerManager, index }: { obj: any, viewerMan
           )}
       </div>
   );
-}
-
-function SliderRow({ label, value, min, max, onChange }: { label: string, value: number, min: number, max: number, onChange: (v: number) => void }) {
-    return (
-        <div className="flex items-center gap-2">
-            <span className="text-xs font-mono font-bold text-slate-500 w-3">{label}</span>
-            <input 
-                type="range" 
-                min={min} max={max} step={1}
-                value={value} 
-                onChange={e => onChange(parseFloat(e.target.value))}
-                className="flex-1 h-1.5 bg-slate-200 dark:bg-slate-700 rounded-lg appearance-none cursor-pointer"
-            />
-            <input 
-                type="number" 
-                className="w-14 text-xs bg-slate-100 dark:bg-slate-800 border-none rounded p-1 text-right text-slate-700 dark:text-slate-300 font-mono" 
-                value={Math.round(value)}
-                onChange={e => onChange(parseFloat(e.target.value) || 0)}
-            />
-        </div>
-    );
 }
 

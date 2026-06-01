@@ -46,6 +46,7 @@ export class ViewerManager {
   rulersVisible: boolean = false;
   isAutoRotating: boolean = false;
   rulerAnimationFrame: any = null;
+  lastPlanesState: any = null;
   lastCameraState: string = '';
 
   // Memory Leak Prevention & Disposal tracking
@@ -608,7 +609,7 @@ export class ViewerManager {
                  if (visibleHit) {
                      let normal = null;
                      if (visibleHit.face && visibleHit.face.normal && window.THREE) {
-                         const THREE = window.THREE;
+
                          normal = visibleHit.face.normal.clone();
                          normal.transformDirection(visibleHit.object.matrixWorld);
                      }
@@ -1519,6 +1520,65 @@ export class ViewerManager {
       return stl;
   }
 
+  duplicatePlanningObject(id: string) {
+      const obj = this.planningObjects.find(o => o.id === id);
+      if (!obj || !window.THREE) return;
+      
+      if (obj.type === 'plane') {
+          this.createPlanningPlane(
+              new window.THREE.Vector3(obj.p1.x, obj.p1.y, obj.p1.z),
+              new window.THREE.Vector3(obj.p2.x, obj.p2.y, obj.p2.z),
+              new window.THREE.Vector3(obj.p3.x, obj.p3.y, obj.p3.z),
+              obj.extWidth,
+              obj.extLength
+          );
+          if (this.planningObjects.length > 0) {
+              const newObj = this.planningObjects[this.planningObjects.length - 1];
+              this.updatePlaneGeometry(newObj.id, obj.extWidth || 0, obj.thickness || 0);
+          }
+      } else if (obj.type === 'cylinder') {
+          this.createPlanningCylinder(
+              new window.THREE.Vector3(obj.p1.x, obj.p1.y, obj.p1.z),
+              new window.THREE.Vector3(obj.p2.x, obj.p2.y, obj.p2.z),
+              obj.diameter / 2,
+              obj.extension
+          );
+      } else if (obj.type === 'curve') {
+          this.createPlanningCurve(
+              obj.points.map((p: any) => new window.THREE.Vector3(p.x, p.y, p.z)),
+              obj.thickness
+          );
+      } else if (obj.type === 'measurement') {
+          this.createPlanningMeasurement(
+              new window.THREE.Vector3(obj.p1.x, obj.p1.y, obj.p1.z),
+              new window.THREE.Vector3(obj.p2Coord.x, obj.p2Coord.y, obj.p2Coord.z),
+              obj.angle
+          );
+      }
+
+      if (this.planningObjects.length > 0) {
+          const newObj = this.planningObjects[this.planningObjects.length - 1];
+          newObj.name = `${obj.name} (Copy)`;
+          newObj.groupId = obj.groupId;
+          newObj.color = obj.color;
+          if (newObj.mesh && newObj.mesh.material && window.THREE) {
+              if (Array.isArray(newObj.mesh.material)) {
+                  newObj.mesh.material.forEach((m: any) => m.color?.set(newObj.color));
+              } else {
+                  newObj.mesh.material.color?.set(newObj.color);
+              }
+          }
+          if (obj.visible === false) {
+             newObj.visible = false;
+             if (newObj.mesh) newObj.mesh.visible = false;
+          }
+          if (this.config.onPlanningObjectsChange) {
+              this.config.onPlanningObjectsChange(this.planningObjects);
+          }
+          this.saveToLocalStorage();
+      }
+  }
+
   exportPlanningObjectSTL(id: string) {
       const obj = this.planningObjects.find(o => o.id === id);
       if (!obj) return;
@@ -1530,6 +1590,81 @@ export class ViewerManager {
       const link = document.createElement('a');
       link.href = url;
       link.download = `${obj.name || obj.id}.stl`;
+      link.click();
+      URL.revokeObjectURL(url);
+  }
+
+  async exportPlanningGroupZip(groupId: string) {
+      const group = this.planningGroups.find(g => g.id === groupId);
+      if (!group) return;
+
+      const groupObjects = this.planningObjects.filter(obj => obj.groupId === groupId);
+      if (groupObjects.length === 0) return;
+
+      const JSZip = (await import('jszip')).default;
+      const zip = new JSZip();
+      const metadataList: any[] = [];
+
+      groupObjects.forEach(obj => {
+          const stl = this.generateSTLString(obj, true);
+          if (stl) {
+              zip.file(`${obj.name || obj.id}.stl`, stl);
+              const serializableObj = { ...obj };
+              delete serializableObj.mesh;
+              delete serializableObj.labelSprite;
+              delete serializableObj.labelDiv;
+              delete serializableObj.curvePath;
+              
+              metadataList.push({
+                  id: obj.id,
+                  name: obj.name || obj.id,
+                  type: obj.type,
+                  color: obj.color,
+                  baseDistance: obj.baseDistance,
+                  angle: obj.angle,
+                  groupId: obj.groupId || null,
+                  groupName: group.name,
+                  ...serializableObj,
+                  coordinateSystem: {
+                      systemType: "Loaded Model Local Coordinate Space",
+                      units: "millimeters (mm)",
+                      origin: "Aligned with loaded model origin (local space)"
+                  }
+              });
+          }
+      });
+
+      const exportData = {
+          coordinateSystem: {
+              systemType: "Loaded Model Local Coordinate Space",
+              units: "millimeters (mm)",
+              origin: "Aligned with loaded model origin (local space)",
+              note: "Planning objects coordinates have been exported relative to the same coordinate system as the loaded 3D model."
+          },
+          group: group.name,
+          objects: metadataList
+      };
+
+      zip.file('metadata.json', JSON.stringify(exportData, null, 2));
+
+      const readmeText = `COORDINATE SYSTEM DEFINITION & SPECIFICATION
+---------------------------------------------
+System Type: Loaded Model Local Coordinate Space
+Units of Measurement: Millimeters (mm)
+
+Geometry Details:
+All exported 3D STL files are saved relative to the loaded model's own local coordinate system.
+This compensates for any centering, scaling, or rotative transformations applied on-screen in the viewer canvas.
+These files are ready to be aligned directly back into standard engineering and CAD tools in the model's native workspace coordinate framework.
+`;
+      zip.file('coordinate_system_info.txt', readmeText);
+
+      const content = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(content);
+      const link = document.createElement('a');
+      link.href = url;
+      const prefix = this.loadedFilename ? this.loadedFilename.split('.').slice(0, -1).join('.') : 'Model';
+      link.download = `${prefix}_${group.name}_Planning.zip`;
       link.click();
       URL.revokeObjectURL(url);
   }
@@ -1546,6 +1681,12 @@ export class ViewerManager {
           const stl = this.generateSTLString(obj, true);
           if (stl) {
               zip.file(`${obj.name || obj.id}.stl`, stl);
+              const serializableObj = { ...obj };
+              delete serializableObj.mesh;
+              delete serializableObj.labelSprite;
+              delete serializableObj.labelDiv;
+              delete serializableObj.curvePath;
+
               metadataList.push({
                   id: obj.id,
                   name: obj.name || obj.id,
@@ -1555,6 +1696,7 @@ export class ViewerManager {
                   angle: obj.angle,
                   groupId: obj.groupId || null,
                   groupName: obj.groupId ? (this.planningGroups.find(g => g.id === obj.groupId)?.name || '') : '',
+                  ...serializableObj,
                   coordinateSystem: {
                       systemType: "Loaded Model Local Coordinate Space",
                       units: "millimeters (mm)",
@@ -1594,9 +1736,122 @@ These files are ready to be aligned directly back into standard engineering and 
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = 'planning_objects.zip';
+      const prefix = this.loadedFilename ? this.loadedFilename.split('.').slice(0, -1).join('.') : 'Model';
+      link.download = `${prefix}_All_Planning.zip`;
       link.click();
       URL.revokeObjectURL(url);
+  }
+
+  async importPlanningObjectsZip(file: File) {
+      if (!window.THREE) return;
+      
+      const JSZip = (await import('jszip')).default;
+      const zip = new JSZip();
+      try {
+          const contents = await zip.loadAsync(file);
+          if (!contents.files['metadata.json']) {
+              console.warn("No metadata.json found in the zip file.");
+              return;
+          }
+          
+          const metadataStr = await contents.files['metadata.json'].async("string");
+          const metadata = JSON.parse(metadataStr);
+          const objectsToLoad = metadata.objects || [];
+          
+          let groupMap = new Map<string, string>(); // Maps old group ID or name to new group ID
+          
+          // First, create any new groups, resolving by name if possible
+          if (metadata.group) {
+             let existingGrp = this.planningGroups.find(g => g.name === metadata.group);
+             if (!existingGrp) {
+                 const newId = this.addPlanningGroup(metadata.group);
+                 groupMap.set('export_group', newId);
+             } else {
+                 groupMap.set('export_group', existingGrp.id);
+             }
+          }
+          
+          for (const obj of objectsToLoad) {
+               if (obj.groupName) {
+                   let existingGrp = this.planningGroups.find(g => g.name === obj.groupName);
+                   if (!existingGrp) {
+                       const newId = this.addPlanningGroup(obj.groupName);
+                       groupMap.set(obj.groupName, newId);
+                   } else {
+                       groupMap.set(obj.groupName, existingGrp.id);
+                   }
+               }
+          }
+          
+          // Now recreate objects
+          for (const obj of objectsToLoad) {
+              // Try not to duplicate by name if they somehow match perfectly? Or just duplicate. 
+              // Usually we just recreate.
+              if (obj.type === 'plane' && obj.p1 && obj.p2 && obj.p3) {
+                  this.createPlanningPlane(
+                      new window.THREE.Vector3(obj.p1.x, obj.p1.y, obj.p1.z),
+                      new window.THREE.Vector3(obj.p2.x, obj.p2.y, obj.p2.z),
+                      new window.THREE.Vector3(obj.p3.x, obj.p3.y, obj.p3.z),
+                      obj.extWidth,
+                      obj.extLength
+                  );
+                  if (this.planningObjects.length > 0) {
+                      const newObj = this.planningObjects[this.planningObjects.length - 1];
+                      this.updatePlaneGeometry(newObj.id, obj.extWidth || 0, obj.thickness || 0);
+                  }
+              } else if (obj.type === 'cylinder' && obj.p1 && obj.p2) {
+                  this.createPlanningCylinder(
+                      new window.THREE.Vector3(obj.p1.x, obj.p1.y, obj.p1.z),
+                      new window.THREE.Vector3(obj.p2.x, obj.p2.y, obj.p2.z),
+                      (obj.diameter !== undefined ? obj.diameter : obj.radius * 2) / 2,
+                      obj.extension
+                  );
+              } else if (obj.type === 'curve' && obj.points) {
+                  this.createPlanningCurve(
+                      obj.points.map((p: any) => new window.THREE.Vector3(p.x, p.y, p.z)),
+                      obj.thickness
+                  );
+              } else if (obj.type === 'measurement' && obj.p1 && obj.p2Coord) {
+                  this.createPlanningMeasurement(
+                      new window.THREE.Vector3(obj.p1.x, obj.p1.y, obj.p1.z),
+                      new window.THREE.Vector3(obj.p2Coord.x, obj.p2Coord.y, obj.p2Coord.z),
+                      obj.angle || 0
+                  );
+              } else {
+                 console.warn("Unsupported or missing data for planning object:", obj);
+                 continue;
+              }
+              
+              if (this.planningObjects.length > 0) {
+                  const newObj = this.planningObjects[this.planningObjects.length - 1];
+                  newObj.name = obj.name;
+                  if (obj.groupName) {
+                      newObj.groupId = groupMap.get(obj.groupName);
+                  } else if (metadata.group && groupMap.has('export_group')) {
+                      newObj.groupId = groupMap.get('export_group');
+                  }
+                  newObj.color = obj.color;
+                  if (newObj.mesh && newObj.mesh.material && window.THREE) {
+                      if (Array.isArray(newObj.mesh.material)) {
+                          newObj.mesh.material.forEach((m: any) => m.color?.set(newObj.color));
+                      } else {
+                          newObj.mesh.material.color?.set(newObj.color);
+                      }
+                  }
+                  if (obj.visible === false) {
+                      newObj.visible = false;
+                      if (newObj.mesh) newObj.mesh.visible = false;
+                  }
+              }
+          }
+          
+          if (this.config.onPlanningObjectsChange) {
+              this.config.onPlanningObjectsChange(this.planningObjects);
+          }
+          this.saveToLocalStorage();
+      } catch (e) {
+          console.error("Failed to parse or load planning ZIP file", e);
+      }
   }
 
   highlightMesh(id: number | null) {
@@ -1716,6 +1971,7 @@ These files are ready to be aligned directly back into standard engineering and 
   }
 
   updateClippingPlanes(planesState: any) {
+    this.lastPlanesState = planesState;
     if (!this.viewer?.viewer?.renderer) return;
     const renderer = this.viewer.viewer.renderer;
     renderer.localClippingEnabled = true;
@@ -1740,12 +1996,40 @@ These files are ready to be aligned directly back into standard engineering and 
                 if (axis === 'y') normal.set(0, 1, 0);
                 if (axis === 'z') normal.set(0, 0, 1);
 
-                if (state.invert) normal.negate();
-
                 const pointOnPlane = new window.THREE.Vector3();
                 if (axis === 'x') pointOnPlane.x = pos;
                 if (axis === 'y') pointOnPlane.y = pos;
                 if (axis === 'z') pointOnPlane.z = pos;
+
+                if (state.alignToCamera) {
+                    if (this.viewer?.viewer?.navigation?.GetCamera) {
+                        const cam = this.viewer.viewer.navigation.GetCamera();
+                        if (cam && cam.eye && cam.center) {
+                            normal.set(cam.center.x - cam.eye.x, cam.center.y - cam.eye.y, cam.center.z - cam.eye.z).normalize();
+                        }
+                    } else if (this.viewer?.viewer?.navigation?.camera) {
+                        this.viewer.viewer.navigation.camera.getWorldDirection(normal);
+                    }
+                    
+                    if (!this.modelBBox.isEmpty()) {
+                        const bboxCenter = new window.THREE.Vector3();
+                        this.modelBBox.getCenter(bboxCenter);
+                        
+                        const absNormal = new window.THREE.Vector3(Math.abs(normal.x), Math.abs(normal.y), Math.abs(normal.z));
+                        const boxSize = new window.THREE.Vector3();
+                        this.modelBBox.getSize(boxSize);
+                        
+                        const spanExtents = (boxSize.x * absNormal.x + boxSize.y * absNormal.y + boxSize.z * absNormal.z);
+                        const scrubMin = -spanExtents / 2;
+                        const scrubMax = spanExtents / 2;
+                        
+                        const scrubPos = scrubMin + (scrubMax - scrubMin) * (state.sliderVal / 100);
+                        
+                        pointOnPlane.copy(bboxCenter).add(normal.clone().multiplyScalar(scrubPos));
+                    }
+                }
+
+                if (state.invert) normal.negate();
 
                 state.plane.normal.copy(normal);
                 state.plane.constant = -normal.dot(pointOnPlane);
@@ -1758,10 +2042,22 @@ These files are ready to be aligned directly back into standard engineering and 
             if (mesh.material) {
                 const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
                 materials.forEach((mat: any) => {
-                    mat.clippingPlanes = activePlanes;
-                    mat.clipShadows = true;
-                    mat.side = window.THREE.DoubleSide;
-                    mat.needsUpdate = true;
+                    let needsAssignment = false;
+                    if (!mat.clippingPlanes || mat.clippingPlanes.length !== activePlanes.length) {
+                        needsAssignment = true;
+                    } else {
+                        for (let i = 0; i < activePlanes.length; i++) {
+                            if (mat.clippingPlanes[i] !== activePlanes[i]) {
+                                needsAssignment = true; break;
+                            }
+                        }
+                    }
+                    if (needsAssignment) {
+                        mat.clippingPlanes = activePlanes;
+                        mat.clipShadows = true;
+                        mat.side = window.THREE.DoubleSide;
+                        mat.needsUpdate = true;
+                    }
                 });
             }
         });
@@ -1770,8 +2066,10 @@ These files are ready to be aligned directly back into standard engineering and 
             if (mesh.material) {
                 const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
                 materials.forEach((mat: any) => {
-                    mat.clippingPlanes = null;
-                    mat.needsUpdate = true;
+                    if (mat.clippingPlanes !== null) {
+                        mat.clippingPlanes = null;
+                        mat.needsUpdate = true;
+                    }
                 });
             }
         });
@@ -1872,6 +2170,19 @@ These files are ready to be aligned directly back into standard engineering and 
 
   domUpdateLoop = () => {
     try {
+        if (this.lastPlanesState) {
+            let needsUpdate = false;
+            for (const axis of ['x', 'y', 'z']) {
+               if (this.lastPlanesState[axis]?.active && this.lastPlanesState[axis]?.alignToCamera) {
+                   needsUpdate = true;
+                   break;
+               }
+            }
+            if (needsUpdate) {
+                this.updateClippingPlanes(this.lastPlanesState);
+            }
+        }
+    
         if (this.viewer?.viewer?.navigation) {
             
             if (this.isAutoRotating && window.THREE) {

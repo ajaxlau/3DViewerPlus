@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useViewer } from '../context/ViewerContext';
-import { BoxSelect, Camera, Share2 } from 'lucide-react';
+import { BoxSelect, Camera } from 'lucide-react';
 
 export function ViewerCanvas() {
   const { setContainerRef, setRulerRefs, isEmpty, rulersVisible, viewerManager, filename, setActiveModal } = useViewer();
@@ -83,13 +83,10 @@ export function ViewerCanvas() {
       {!isEmpty && (
         <button
           onClick={handleQuickSnapshotShare}
-          className="absolute bottom-6 right-6 z-20 w-11 h-11 rounded-full bg-blue-600 hover:bg-blue-700 text-white flex items-center justify-center shadow-lg transition-all hover:scale-105 active:scale-95 group focus:outline-none focus:ring-2 focus:ring-blue-500/40"
+          className="absolute bottom-6 right-6 z-20 w-12 h-12 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 hover:from-blue-500 hover:to-indigo-400 text-white flex items-center justify-center shadow-[0_4px_14px_0_rgba(59,130,246,0.39)] transition-all hover:shadow-[0_6px_20px_rgba(59,130,246,0.23)] hover:-translate-y-0.5 active:translate-y-0 active:scale-95 group focus:outline-none"
           title="Share Snapshot"
         >
-          <div className="relative text-white z-10 flex items-center justify-center">
-            <Camera size={18} className="transition-transform group-hover:-rotate-3" />
-            <Share2 size={12} className="absolute -bottom-1 -right-2 transition-transform group-hover:rotate-6 text-blue-200" />
-          </div>
+          <Camera size={20} className="transition-transform group-hover:scale-110" />
         </button>
       )}
       
