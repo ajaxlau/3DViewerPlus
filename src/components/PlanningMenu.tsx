@@ -1,5 +1,5 @@
 import { useViewer } from '../context/ViewerContext';
-import { X, SlidersHorizontal, Download, Trash2, Crosshair, BoxSelect, Ruler, Plus, Spline, Eye, EyeOff, Folder, FolderPlus, ChevronDown, ChevronRight, FolderOpen, Copy, Upload, Save, GripHorizontal } from 'lucide-react';
+import { X, SlidersHorizontal, Download, Trash2, Crosshair, BoxSelect, Ruler, Compass, Plus, Spline, Eye, EyeOff, Folder, FolderPlus, ChevronDown, ChevronRight, FolderOpen, Copy, Upload, Save, GripHorizontal, Waypoints, MapPin } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 
 export function PlanningMenu() {
@@ -45,7 +45,7 @@ export function PlanningMenu() {
       viewerManager?.undoPlanningPoint();
   };
 
-  const canConfirm = (planningMode === 'plane' && planningPointsPicked === 3) || (planningMode === 'cylinder' && planningPointsPicked === 2) || (planningMode === 'measure' && planningPointsPicked === 2) || (planningMode === 'curve' && planningPointsPicked >= 2);
+  const canConfirm = (planningMode === 'plane' && planningPointsPicked === 3) || (planningMode === 'cylinder' && planningPointsPicked === 2) || (planningMode === 'measure' && planningPointsPicked === 2) || (planningMode === 'curve' && planningPointsPicked >= 2) || (planningMode === 'angle' && planningPointsPicked === 3);
 
   return (
     <aside 
@@ -64,15 +64,15 @@ export function PlanningMenu() {
         </div>
 
         <div className="p-4 flex flex-col gap-4 overflow-y-auto">
-        <div className="flex flex-col gap-2">
-            <div className={`flex flex-col rounded border transition-colors ${planningMode === 'measure' ? 'border-emerald-500 bg-emerald-50/5 dark:bg-emerald-950/5' : 'border-slate-200 dark:border-slate-700'}`}>
+        <div className="grid grid-cols-2 gap-2">
+            <div className={`flex flex-col rounded border transition-colors ${planningMode === 'measure' ? 'col-span-2 border-emerald-500 bg-emerald-50/5 dark:bg-emerald-950/5' : 'col-span-1 border-slate-200 dark:border-slate-700'}`}>
                 <button 
                     onClick={() => { setPlanningMode(planningMode === 'measure' ? 'none' : 'measure'); }}
                     className={`flex items-center p-3 text-xs font-semibold uppercase tracking-wider transition-colors w-full text-left ${
                         planningMode === 'measure' ? 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 rounded-t' : 'bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded'
                     }`}
                 >
-                    <Ruler size={18} className="mr-3 shrink-0" />
+                    <Waypoints size={18} className="mr-3 shrink-0" />
                     <div className="flex flex-col">
                         <span>Measure Distance</span>
                         <span className="text-[10px] font-normal opacity-70 normal-case tracking-normal mt-0.5">2 Points</span>
@@ -111,7 +111,45 @@ export function PlanningMenu() {
                 )}
             </div>
 
-            <div className={`flex flex-col rounded border transition-colors ${planningMode === 'plane' ? 'border-blue-500' : 'border-slate-200 dark:border-slate-700'}`}>
+            <div className={`flex flex-col rounded border transition-colors ${planningMode === 'angle' ? 'col-span-2 border-amber-500 bg-amber-50/5 dark:bg-amber-950/5' : 'col-span-1 border-slate-200 dark:border-slate-700'}`}>
+                <button 
+                    onClick={() => { setPlanningMode(planningMode === 'angle' ? 'none' : 'angle'); }}
+                    className={`flex items-center p-3 text-xs font-semibold uppercase tracking-wider transition-colors w-full text-left ${
+                        planningMode === 'angle' ? 'bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 rounded-t' : 'bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded'
+                    }`}
+                >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="mr-3 shrink-0">
+                        <path d="M3 21h18" />
+                        <path d="M3 21l18-18" />
+                        <path d="M13 21a10 10 0 0 0-2.93-7.07" />
+                    </svg>
+                    <div className="flex flex-col">
+                        <span>Measure Angle</span>
+                        <span className="text-[10px] font-normal opacity-70 normal-case tracking-normal mt-0.5">3 Points</span>
+                    </div>
+                </button>
+                {planningMode === 'angle' && (
+                    <div className="p-3 border-t border-amber-200 dark:border-amber-800/30 bg-amber-50/50 dark:bg-amber-900/10 text-xs text-amber-800 dark:text-amber-300 flex flex-col gap-3 rounded-b">
+                        <div className="text-center mb-1 leading-normal">
+                            Click on the 3D model to select three points:<br/>
+                            1. Star point, <strong>2. Vertex / Center point</strong>, 3. End point.<br/>
+                            <span className="font-semibold text-amber-600 dark:text-amber-400">Angle is automatically measured and saved below.</span><br/>
+                            Points picked: <strong>{planningPointsPicked}</strong> / 3
+                        </div>
+
+                        <div className="flex gap-2 mt-2">
+                            <button onClick={handleUndo} disabled={planningPointsPicked === 0} className="flex-1 px-2 py-1.5 rounded bg-amber-200 dark:bg-amber-800/50 text-amber-800 dark:text-amber-300 font-semibold transition hover:bg-amber-300 dark:hover:bg-amber-700/50 disabled:opacity-50 disabled:cursor-not-allowed text-center">
+                                Undo Picked
+                            </button>
+                            <button onClick={() => setPlanningMode('none')} className="flex-1 px-2 py-1.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold transition hover:bg-slate-300 dark:hover:bg-slate-600 text-center">
+                                Done Measuring
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            <div className={`flex flex-col rounded border transition-colors ${planningMode === 'plane' ? 'col-span-2 border-blue-500' : 'col-span-1 border-slate-200 dark:border-slate-700'}`}>
                 <div className={`flex items-center w-full transition-colors ${
                     planningMode === 'plane' ? 'bg-blue-50 dark:bg-blue-900/20 rounded-t' : 'bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded'
                 }`}>
@@ -156,13 +194,13 @@ export function PlanningMenu() {
                 )}
             </div>
 
-            <div className={`flex flex-col rounded border transition-colors ${planningMode === 'cylinder' ? 'border-amber-500' : 'border-slate-200 dark:border-slate-700'}`}>
+            <div className={`flex flex-col rounded border transition-colors ${planningMode === 'cylinder' ? 'col-span-2 border-indigo-500' : 'col-span-1 border-slate-200 dark:border-slate-700'}`}>
                 <div className={`flex items-center w-full transition-colors ${
-                    planningMode === 'cylinder' ? 'bg-amber-50 dark:bg-amber-900/20 rounded-t' : 'bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded'
+                    planningMode === 'cylinder' ? 'bg-indigo-50 dark:bg-indigo-900/20 rounded-t' : 'bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded'
                 }`}>
                     <button 
                         onClick={() => { setPlanningMode(planningMode === 'cylinder' ? 'none' : 'cylinder'); }}
-                        className={`flex-1 flex items-center p-3 text-xs font-semibold uppercase tracking-wider text-left ${planningMode === 'cylinder' ? 'text-amber-600 dark:text-amber-400' : ''}`}
+                        className={`flex-1 flex items-center p-3 text-xs font-semibold uppercase tracking-wider text-left ${planningMode === 'cylinder' ? 'text-indigo-600 dark:text-indigo-400' : ''}`}
                     >
                         <Crosshair size={18} className="mr-3 shrink-0" />
                         <div className="flex flex-col">
@@ -200,7 +238,7 @@ export function PlanningMenu() {
                     </div>
                 )}
             </div>
-            <div className={`flex flex-col rounded border transition-colors ${planningMode === 'curve' ? 'border-pink-500 bg-pink-50/5 dark:bg-pink-950/5' : 'border-slate-200 dark:border-slate-700'}`}>
+            <div className={`flex flex-col rounded border transition-colors ${planningMode === 'curve' ? 'col-span-2 border-pink-500 bg-pink-50/5 dark:bg-pink-950/5' : 'col-span-1 border-slate-200 dark:border-slate-700'}`}>
                 <div className={`flex items-center w-full transition-colors ${
                     planningMode === 'curve' ? 'bg-pink-50 dark:bg-pink-900/20 rounded-t' : 'bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded'
                 }`}>
@@ -245,18 +283,48 @@ export function PlanningMenu() {
                 )}
             </div>
 
+            <div className={`flex flex-col rounded border transition-colors ${planningMode === 'point' ? 'col-span-2 border-purple-500 bg-purple-50/5 dark:bg-purple-950/5' : 'col-span-1 border-slate-200 dark:border-slate-700'}`}>
+                <button 
+                    onClick={() => { setPlanningMode(planningMode === 'point' ? 'none' : 'point'); }}
+                    className={`flex items-center p-3 text-xs font-semibold uppercase tracking-wider transition-colors w-full text-left ${
+                        planningMode === 'point' ? 'bg-purple-50 dark:bg-purple-900/20 text-purple-600 dark:text-purple-400 rounded-t' : 'bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 rounded'
+                    }`}
+                >
+                    <MapPin size={18} className="mr-3 shrink-0" />
+                    <div className="flex flex-col">
+                        <span>Mark Point</span>
+                        <span className="text-[10px] font-normal opacity-70 normal-case tracking-normal mt-0.5">1 Point</span>
+                    </div>
+                </button>
+                {planningMode === 'point' && (
+                    <div className="p-3 border-t border-purple-200 dark:border-purple-800/30 bg-purple-50/50 dark:bg-purple-900/10 text-xs text-purple-800 dark:text-purple-300 flex flex-col gap-3 rounded-b">
+                        <div className="text-center mb-1 leading-normal">
+                            Click anywhere on the model to place points.<br/>
+                            <span className="font-semibold text-purple-600 dark:text-purple-400">Points are automatically saved below.</span>
+                        </div>
+                        <div className="flex mt-2">
+                            <button onClick={() => setPlanningMode('none')} className="w-full px-2 py-1.5 rounded bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300 font-semibold transition hover:bg-slate-300 dark:hover:bg-slate-600 text-center">
+                                Done Marking
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
+
         </div>
 
         <div className="border-t border-slate-200 dark:border-slate-800 pt-4 mt-2">
-            <div className="flex items-center justify-between mb-3">
-                <div className="flex items-center gap-2">
-                    <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Created Objects</h4>
+            <div className="flex flex-col gap-2 mb-3">
+                <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Created Objects</h4>
+                <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded p-1.5 px-3">
+                    {/* Open Button */}
                     <button 
                         onClick={() => fileInputRef.current?.click()} 
-                        className="p-1 text-slate-400 hover:text-blue-500 transition"
+                        className="text-[10px] flex items-center gap-1.5 font-bold text-slate-500 hover:text-blue-500 dark:text-slate-400 dark:hover:text-blue-400 uppercase tracking-wider transition"
                         title="Open Project"
                     >
                         <FolderOpen size={13} />
+                        <span>Open</span>
                     </button>
                     <input 
                         type="file" 
@@ -272,44 +340,52 @@ export function PlanningMenu() {
                             if (fileInputRef.current) fileInputRef.current.value = '';
                         }}
                     />
-                </div>
-                {planningObjects.length > 0 && (
-                    <div className="flex items-center gap-3">
-                        {confirmClearAll ? (
-                            <div className="flex items-center gap-1 shrink-0 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 px-1 py-0.5 rounded text-[9px]">
-                                <span className="text-red-500 dark:text-red-400 font-bold mr-0.5 scale-90 uppercase tracking-wider">Reset All?</span>
+
+                    {planningObjects.length > 0 && (
+                        <div className="flex items-center gap-4">
+                            {/* Reset Button */}
+                            {confirmClearAll ? (
+                                <div className="flex items-center gap-1 shrink-0 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 px-1 py-0.5 rounded text-[9px]">
+                                    <span className="text-red-500 dark:text-red-400 font-bold mr-0.5 scale-90 uppercase tracking-wider">Reset All?</span>
+                                    <button 
+                                        onClick={() => {
+                                            viewerManager?.clearAllPlanningObjects();
+                                            setConfirmClearAll(false);
+                                        }}
+                                        className="p-0.5 text-white bg-red-500 hover:bg-red-600 rounded transition"
+                                    >
+                                        <X size={10} className="rotate-45" />
+                                    </button>
+                                    <button 
+                                        onClick={() => setConfirmClearAll(false)}
+                                        className="p-0.5 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 bg-slate-200 dark:bg-slate-800 rounded transition"
+                                    >
+                                        <X size={10} />
+                                    </button>
+                                </div>
+                            ) : (
                                 <button 
-                                    onClick={() => {
-                                        viewerManager?.clearAllPlanningObjects();
-                                        setConfirmClearAll(false);
-                                    }}
-                                    className="p-0.5 text-white bg-red-500 hover:bg-red-600 rounded transition"
+                                    onClick={() => setConfirmClearAll(true)} 
+                                    className="text-[10px] flex items-center gap-1.5 font-bold text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 uppercase tracking-wider transition"
+                                    title="Clear all created objects"
                                 >
-                                    <X size={10} className="rotate-45" />
+                                    <Trash2 size={13} />
+                                    Reset
                                 </button>
-                                <button 
-                                    onClick={() => setConfirmClearAll(false)}
-                                    className="p-0.5 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 bg-slate-200 dark:bg-slate-800 rounded transition"
-                                >
-                                    <X size={10} />
-                                </button>
-                            </div>
-                        ) : (
+                            )}
+
+                            {/* Save Button */}
                             <button 
-                                onClick={() => setConfirmClearAll(true)} 
-                                className="text-[10px] flex items-center gap-1 font-bold text-red-500 hover:text-red-600 dark:text-red-400 dark:hover:text-red-300 uppercase tracking-wider transition"
-                                title="Clear all created objects"
+                                onClick={() => viewerManager?.exportAllPlanningObjectsZip()} 
+                                className="text-[10px] flex items-center gap-1.5 font-bold text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 uppercase tracking-wider transition" 
+                                title="Save Planning"
                             >
-                                <Trash2 size={12} />
-                                Reset
+                                <Save size={13} />
+                                Save
                             </button>
-                        )}
-                        <button onClick={() => viewerManager?.exportAllPlanningObjectsZip()} className="text-[10px] flex items-center gap-1 font-bold text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 uppercase tracking-wider transition" title="Save Planning">
-                            <Save size={12} />
-                            Save
-                        </button>
-                    </div>
-                )}
+                        </div>
+                    )}
+                </div>
             </div>
 
             {/* Inline Group Creation Form */}
@@ -513,6 +589,8 @@ function ScaleSliderRow({ label, value, min, max, step, onChange, isMm = false }
 function PlanningObjectItem({ obj, viewerManager }: { obj: any, viewerManager: any, key?: any }) {
   const { planningGroups = [] } = useViewer();
   const [open, setOpen] = useState(false);
+  const [draggable, setDraggable] = useState(false);
+  const [isDraggingThis, setIsDraggingThis] = useState(false);
   const itemRef = useRef<HTMLDivElement>(null);
 
   const [planeExtSize, setPlaneExtSize] = useState(obj.extWidth !== undefined ? obj.extWidth : 10);
@@ -522,6 +600,7 @@ function PlanningObjectItem({ obj, viewerManager }: { obj: any, viewerManager: a
   const [cylinderExtension, setCylinderExtension] = useState(obj.extension !== undefined ? obj.extension : 20);
   
   const [curveDiameter, setCurveDiameter] = useState(obj.thickness !== undefined ? obj.thickness : 0.2);
+  const [pointDiameter, setPointDiameter] = useState(obj.diameter !== undefined ? obj.diameter : 0.2);
 
   useEffect(() => {
     if (!open) return;
@@ -564,20 +643,38 @@ function PlanningObjectItem({ obj, viewerManager }: { obj: any, viewerManager: a
       setCurveDiameter(val);
   };
 
+  const updatePointDiameter = (val: number) => {
+      if (viewerManager && typeof viewerManager.updatePlanningPointDiameter === 'function') {
+          viewerManager.updatePlanningPointDiameter(obj.id, val);
+      }
+      setPointDiameter(val);
+  };
+
   return (
       <div 
         ref={itemRef} 
-        draggable
+        draggable={draggable}
         onDragStart={(e) => {
             e.dataTransfer.setData('text/plain', obj.id);
             e.dataTransfer.effectAllowed = 'move';
+            setIsDraggingThis(true);
         }}
-        className="border border-slate-200 dark:border-slate-800 rounded overflow-hidden cursor-grab active:cursor-grabbing group/item"
+        onDragEnd={() => {
+            setDraggable(false);
+            setIsDraggingThis(false);
+        }}
+        className={`border rounded overflow-hidden group/item transition-all duration-200 ${
+            isDraggingThis 
+                ? 'border-blue-500 bg-blue-50/50 dark:bg-blue-950/25 ring-2 ring-blue-500/30' 
+                : 'border-slate-200 dark:border-slate-800'
+        }`}
       >
           <div className="bg-slate-50 dark:bg-slate-800 flex flex-col p-2 gap-1.5 relative">
               <div 
-                  className="absolute top-1 right-1 text-slate-300 dark:text-slate-600 opacity-50 group-hover/item:opacity-100 transition-opacity"
+                  className="absolute top-1 right-1 text-slate-300 dark:text-slate-600 opacity-50 group-hover/item:opacity-100 transition-opacity cursor-grab active:cursor-grabbing p-1 hover:text-blue-550 dark:hover:text-blue-400"
                   title="Drag to rearrange"
+                  onPointerDown={() => setDraggable(true)}
+                  onPointerUp={() => setDraggable(false)}
               >
                   <GripHorizontal size={14} />
               </div>
@@ -590,42 +687,56 @@ function PlanningObjectItem({ obj, viewerManager }: { obj: any, viewerManager: a
                       value={obj.name || obj.id}
                       onChange={(e) => viewerManager.updatePlanningObjectName(obj.id, e.target.value)}
                   />
-                  <div className="px-1.5 leading-tight mt-0.5 text-slate-800 dark:text-slate-300">
+                  <div className="px-1.5 leading-tight mt-0.5 text-slate-800 dark:text-slate-300 flex items-center gap-1 overflow-x-auto scrollbar-none">
                   {obj.type === 'cylinder' && obj.radius !== undefined && (
-                      <span className="text-[11px] font-mono leading-tight">
+                      <span className="text-[11px] font-mono leading-tight whitespace-nowrap tracking-tight">
                           Dia: {(obj.radius * 2).toFixed(1)} mm | Len: {obj.length.toFixed(1)} mm
                       </span>
                   )}
                   {obj.type === 'plane' && obj.width !== undefined && (
-                      <span className="text-[11px] font-mono leading-tight">
+                      <span className="text-[11px] font-mono leading-tight whitespace-nowrap tracking-tight">
                           Size: {obj.width.toFixed(1)} × {obj.height.toFixed(1)} mm | Thk: {obj.thickness.toFixed(1)} mm
                       </span>
                   )}
                   {obj.type === 'curve' && obj.thickness !== undefined && (
-                      <span className="text-[11px] font-mono leading-tight">
+                      <span className="text-[11px] font-mono leading-tight whitespace-nowrap tracking-tight">
                           Len: {(obj.baseDistance || 0).toFixed(1)} mm | Dia: {curveDiameter.toFixed(1)} mm
                       </span>
                   )}
                   {obj.type === 'measurement' && obj.baseDistance !== undefined && (
-                      <span className="text-[11px] font-mono leading-tight">
-                          Dist: {obj.baseDistance.toFixed(2)} mm | Angle: {(obj.angle || 0).toFixed(1)}°
+                      <span className="text-[11px] font-mono leading-tight whitespace-nowrap tracking-tight">
+                          Dist: {obj.baseDistance.toFixed(2)} mm | Ang: {(obj.angle || 0).toFixed(1)}°
+                      </span>
+                  )}
+                  {obj.type === 'angle' && obj.angle !== undefined && (
+                      <span className="text-[11px] font-mono leading-tight whitespace-nowrap tracking-tight text-amber-500 font-bold">
+                          Angle: {obj.angle.toFixed(1)}°
+                      </span>
+                  )}
+                  {obj.type === 'point' && obj.diameter !== undefined && (
+                      <span className="text-[11px] font-mono leading-tight whitespace-nowrap tracking-tight text-purple-600 dark:text-purple-400 font-bold">
+                          D: {pointDiameter.toFixed(1)} mm
                       </span>
                   )}
                   </div>
               </div>
               <div className="flex items-center gap-0.5 shrink-0 self-end w-full px-1 justify-end">
-                  <button onClick={() => setOpen(!open)} className={`p-1.5 rounded transition ${open ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400' : 'text-slate-500 hover:bg-white dark:hover:bg-slate-800'}`} title="Adjust Dimensions">
-                      <SlidersHorizontal size={14} />
-                  </button>
+                  {(obj.type !== 'measurement' && obj.type !== 'angle') && (
+                      <button onClick={() => setOpen(!open)} className={`p-1.5 rounded transition ${open ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400' : 'text-slate-500 hover:bg-white dark:hover:bg-slate-800'}`} title="Adjust Dimensions">
+                          <SlidersHorizontal size={14} />
+                      </button>
+                  )}
                   <button onClick={() => viewerManager.duplicatePlanningObject(obj.id)} className="p-1.5 text-slate-500 hover:text-blue-500 dark:text-slate-400 dark:hover:text-blue-400 rounded hover:bg-white dark:hover:bg-slate-800 transition" title="Duplicate Object">
                       <Copy size={14} />
                   </button>
                   <button onClick={() => viewerManager.togglePlanningObjectVisibility(obj.id)} className="p-1.5 text-slate-500 hover:text-blue-500 dark:text-slate-400 dark:hover:text-blue-400 rounded hover:bg-white dark:hover:bg-slate-800 transition" title={obj.visible === false ? "Show Object" : "Hide Object"}>
                       {obj.visible === false ? <EyeOff size={14} /> : <Eye size={14} />}
                   </button>
-                  <button onClick={() => viewerManager.exportPlanningObjectSTL(obj.id)} className="p-1.5 text-slate-500 hover:text-blue-500 dark:text-slate-400 dark:hover:text-blue-400 rounded hover:bg-white dark:hover:bg-slate-800 transition" title="Download STL">
-                      <Download size={14} />
-                  </button>
+                  {(obj.type !== 'measurement' && obj.type !== 'angle') && (
+                      <button onClick={() => viewerManager.exportPlanningObjectSTL(obj.id)} className="p-1.5 text-slate-500 hover:text-blue-500 dark:text-slate-400 dark:hover:text-blue-400 rounded hover:bg-white dark:hover:bg-slate-800 transition" title="Download STL">
+                          <Download size={14} />
+                      </button>
+                  )}
                   <button onClick={() => viewerManager.removePlanningObject(obj.id)} className="p-1.5 text-slate-500 hover:text-red-500 dark:text-slate-400 dark:hover:text-red-400 rounded hover:bg-white dark:hover:bg-slate-800 transition" title="Delete">
                       <Trash2 size={14} />
                   </button>
@@ -651,7 +762,7 @@ function PlanningObjectItem({ obj, viewerManager }: { obj: any, viewerManager: a
                           <ScaleSliderRow 
                               label="Thickness" 
                               value={planeThickness} 
-                              min={0.0} 
+                              min={-1.0} 
                               max={1.0} 
                               step={0.1}
                               onChange={v => handlePlaneChange(undefined, v)} 
@@ -694,6 +805,21 @@ function PlanningObjectItem({ obj, viewerManager }: { obj: any, viewerManager: a
                               max={2.0} 
                               step={0.1}
                               onChange={v => updateCurveDiameter(v)} 
+                              isMm={true}
+                          />
+                      </div>
+                  )}
+
+                  {obj.type === 'point' && (
+                      <div className="flex flex-col gap-2">
+                          <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Point Geometry</div>
+                          <ScaleSliderRow 
+                              label="Diameter" 
+                              value={pointDiameter} 
+                              min={0.1} 
+                              max={2.0} 
+                              step={0.1}
+                              onChange={v => updatePointDiameter(v)} 
                               isMm={true}
                           />
                       </div>

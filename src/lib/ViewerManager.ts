@@ -27,7 +27,7 @@ export class ViewerManager {
   treeParseInterval: any = null;
 
   // Planning Tools state
-  planningMode: 'none' | 'plane' | 'cylinder' | 'measure' | 'curve' = 'none';
+  planningMode: 'none' | 'plane' | 'cylinder' | 'measure' | 'curve' | 'angle' | 'point' = 'none';
   planningPoints: any[] = [];
   planningNormals: any[] = [];
   planningPointMarkers: any[] = [];
@@ -260,6 +260,12 @@ export class ViewerManager {
             p2Coord: obj.p2Coord,
             angle: obj.angle
           };
+        } else if (obj.type === 'point') {
+          return {
+            ...base,
+            points: obj.points,
+            diameter: obj.diameter
+          };
         }
         return base;
       });
@@ -372,6 +378,45 @@ export class ViewerManager {
                 const text = created.name ? `${created.name} (${created.baseDistance.toFixed(2)} mm)` : `${created.baseDistance.toFixed(2)} mm`;
                 created.labelDiv.innerText = text;
                 created.labelDiv.style.display = created.visible ? 'block' : 'none';
+              }
+            }
+          } else if (obj.type === 'angle') {
+            const p1Val = new THREE.Vector3(obj.p1.x, obj.p1.y, obj.p1.z);
+            const p2Val = new THREE.Vector3(obj.p2Coord.x, obj.p2Coord.y, obj.p2Coord.z);
+            const p3Val = new THREE.Vector3(obj.p3.x, obj.p3.y, obj.p3.z);
+            
+            this.createPlanningAngle(p1Val, p2Val, p3Val, obj.angle || 0);
+            
+            const created = this.planningObjects[this.planningObjects.length - 1];
+            if (created) {
+              created.id = obj.id;
+              created.name = obj.name;
+              created.color = obj.color || '#d97706';
+              created.groupId = obj.groupId;
+              created.visible = obj.visible !== false;
+              if (created.mesh) {
+                created.mesh.visible = created.visible;
+              }
+              if (created.labelDiv && created.angle !== undefined) {
+                const text = created.name ? `${created.name} (${created.angle.toFixed(1)}°)` : `${created.angle.toFixed(1)}°`;
+                created.labelDiv.innerText = text;
+                created.labelDiv.style.display = created.visible ? 'block' : 'none';
+              }
+            }
+          } else if (obj.type === 'point') {
+            const pVal = new THREE.Vector3(obj.points[0].x, obj.points[0].y, obj.points[0].z);
+            
+            this.createPlanningPoint(pVal, obj.diameter || 0.2);
+            
+            const created = this.planningObjects[this.planningObjects.length - 1];
+            if (created) {
+              created.id = obj.id;
+              created.name = obj.name;
+              created.color = obj.color || '#9333ea';
+              created.groupId = obj.groupId;
+              created.visible = obj.visible !== false;
+              if (created.mesh) {
+                created.mesh.visible = created.visible;
               }
             }
           }
@@ -634,7 +679,7 @@ export class ViewerManager {
     this.container.addEventListener('pointerup', this.onPointerUp);
   }
 
-  setPlanningMode(mode: 'none' | 'plane' | 'cylinder' | 'measure' | 'curve') {
+  setPlanningMode(mode: 'none' | 'plane' | 'cylinder' | 'measure' | 'curve' | 'angle' | 'point') {
       this.planningMode = mode;
       this.clearPlanningPoints();
   }
@@ -674,6 +719,7 @@ export class ViewerManager {
       if (this.planningMode === 'plane' && this.planningPoints.length >= 3) return;
       if (this.planningMode === 'cylinder' && this.planningPoints.length >= 2) return;
       if (this.planningMode === 'measure' && this.planningPoints.length >= 2) return;
+      if (this.planningMode === 'angle' && this.planningPoints.length >= 3) return;
 
       this.planningPoints.push(point);
       if (normal) {
@@ -684,7 +730,13 @@ export class ViewerManager {
       
       const geometry = new THREE.SphereGeometry(2, 16, 16);
       const isMeasure = this.planningMode === 'measure';
-      const material = new THREE.MeshBasicMaterial({ color: isMeasure ? 0x10b981 : 0xff0000, depthTest: false });
+      const isAngle = this.planningMode === 'angle';
+      
+      let markerColor = 0xff0000;
+      if (isMeasure) markerColor = 0x10b981;
+      if (isAngle) markerColor = 0xd97706;
+      
+      const material = new THREE.MeshBasicMaterial({ color: markerColor, depthTest: false });
       const marker = new THREE.Mesh(geometry, material);
       marker.position.copy(point);
       marker.renderOrder = 999; 
@@ -704,6 +756,36 @@ export class ViewerManager {
           this.clearPlanningPoints();
 
           // Notify context that the objects list updated
+          if (this.config.onPlanningObjectsChange) {
+              this.config.onPlanningObjectsChange(this.planningObjects);
+          }
+          return;
+      }
+
+      if (isAngle && this.planningPoints.length === 3) {
+          const p1 = this.planningPoints[0];
+          const p2 = this.planningPoints[1]; // Vertex point
+          const p3 = this.planningPoints[2];
+
+          const v1 = new THREE.Vector3().subVectors(p1, p2).normalize();
+          const v2 = new THREE.Vector3().subVectors(p3, p2).normalize();
+          const dot = Math.min(Math.max(v1.dot(v2), -1.0), 1.0);
+          const angleRad = Math.acos(dot);
+          const angleDeg = angleRad * (180 / Math.PI);
+
+          this.createPlanningAngle(p1, p2, p3, angleDeg);
+          this.clearPlanningPoints();
+
+          if (this.config.onPlanningObjectsChange) {
+              this.config.onPlanningObjectsChange(this.planningObjects);
+          }
+          return;
+      }
+
+      if (this.planningMode === 'point' && this.planningPoints.length === 1) {
+          const p = this.planningPoints[0];
+          this.createPlanningPoint(p, 0.2); // default 0.2mm
+          this.clearPlanningPoints();
           if (this.config.onPlanningObjectsChange) {
               this.config.onPlanningObjectsChange(this.planningObjects);
           }
@@ -1041,7 +1123,7 @@ export class ViewerManager {
       // Commenting out creating physical THREE.Sprite label to avoid compatibility issues with o3dv render loop.
       // We will handle 2D labels in React.
       const labelDiv = document.createElement('div');
-      labelDiv.className = 'absolute z-50 pointer-events-none font-mono text-[11px] font-bold text-white bg-slate-900 border border-emerald-500 rounded-full px-2 py-0.5 shadow transition-opacity';
+      labelDiv.className = 'absolute z-50 pointer-events-none font-mono text-[11px] font-bold text-white bg-slate-900 border border-emerald-500 rounded-full px-2 py-0.5 shadow transition-opacity whitespace-nowrap tracking-tight';
       labelDiv.innerText = `${distance.toFixed(2)} mm`;
       labelDiv.style.transform = 'translate(-50%, -50%)';
       labelDiv.style.opacity = '0';
@@ -1070,14 +1152,154 @@ export class ViewerManager {
       });
   }
 
+  createPlanningPoint(point: any, diameter: number) {
+      if (!window.THREE || !this.viewer || !this.viewer.viewer) return;
+      const scene = this.viewer.viewer.scene || this.viewer.viewer.mainScene;
+      if (!scene) return;
+
+      const THREE = window.THREE;
+      const radius = diameter / 2;
+      const geometry = new THREE.SphereGeometry(radius, 32, 32);
+      const material = new THREE.MeshBasicMaterial({ 
+          color: 0x9333ea, // Purple-600 feeling
+          transparent: true, 
+          opacity: 0.9,
+          depthTest: false
+      });
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.renderOrder = 999;
+      mesh.position.copy(point);
+
+      // Outline
+      const edges = new THREE.EdgesGeometry(geometry);
+      const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x7e22ce, linewidth: 2, depthTest: false });
+      const line = new THREE.LineSegments(edges, edgeMaterial);
+      mesh.add(line);
+
+      scene.add(mesh);
+      this.viewer.viewer.Render();
+
+      const defaultIdAndName = `Point_${this.nextPlanningObjectId++}`;
+      this.planningObjects.push({
+          id: defaultIdAndName,
+          name: defaultIdAndName,
+          type: 'point',
+          mesh: mesh,
+          labelSprite: null,
+          diameter: diameter,
+          color: '#9333ea',
+          points: [{ x: point.x, y: point.y, z: point.z }]
+      });
+  }
+
+  createPlanningAngle(p1: any, p2: any, p3: any, angle: number) {
+      if (!window.THREE || !this.viewer || !this.viewer.viewer) return;
+      const scene = this.viewer.viewer.scene || this.viewer.viewer.mainScene;
+      if (!scene) return;
+
+      const THREE = window.THREE;
+      const group = new THREE.Group();
+
+      const createArm = (ptStart: any, ptEnd: any, colorHex: number) => {
+          const dist = ptStart.distanceTo(ptEnd);
+          const center = new THREE.Vector3().addVectors(ptStart, ptEnd).multiplyScalar(0.5);
+          const direction = new THREE.Vector3().subVectors(ptEnd, ptStart).normalize();
+          
+          const radius = 0.05;
+          const geometry = new THREE.CylinderGeometry(radius, radius, dist, 16);
+          const material = new THREE.MeshBasicMaterial({
+              color: colorHex,
+              transparent: true,
+              opacity: 0.8,
+              depthTest: false
+          });
+          const armMesh = new THREE.Mesh(geometry, material);
+          armMesh.renderOrder = 999;
+
+          const up = new THREE.Vector3(0, 1, 0);
+          const quaternion = new THREE.Quaternion().setFromUnitVectors(up, direction);
+          armMesh.quaternion.copy(quaternion);
+          armMesh.position.copy(center);
+
+          const edges = new THREE.EdgesGeometry(geometry);
+          const lineMaterial = new THREE.LineBasicMaterial({ color: 0xd97706, linewidth: 2, depthTest: false });
+          const line = new THREE.LineSegments(edges, lineMaterial);
+          armMesh.add(line);
+
+          return armMesh;
+      };
+
+      const arm1 = createArm(p1, p2, 0xd97706);
+      const arm2 = createArm(p3, p2, 0xd97706);
+      group.add(arm1);
+      group.add(arm2);
+
+      const v1 = new THREE.Vector3().subVectors(p1, p2);
+      const v2 = new THREE.Vector3().subVectors(p3, p2);
+      const normal = new THREE.Vector3().crossVectors(v1, v2).normalize();
+
+      const d1 = v1.clone().normalize();
+      const d2 = v2.clone().normalize();
+      
+      const arcRadius = Math.min(v1.length(), v2.length()) * 0.15 || 5;
+      const segmentsCount = 24;
+      const arcPoints: any[] = [];
+      
+      for (let i = 0; i <= segmentsCount; i++) {
+          const t = i / segmentsCount;
+          const angleBetween = d1.angleTo(d2);
+          const dir = d1.clone().applyAxisAngle(normal, angleBetween * t);
+          arcPoints.push(new THREE.Vector3().copy(p2).add(dir.multiplyScalar(arcRadius)));
+      }
+
+      const curve = new THREE.CatmullRomCurve3(arcPoints);
+      const tubeGeom = new THREE.TubeGeometry(curve, segmentsCount, 0.05, 8, false);
+      const tubeMat = new THREE.MeshBasicMaterial({ color: 0xd97706, transparent: true, opacity: 0.9, depthTest: false });
+      const tubeMesh = new THREE.Mesh(tubeGeom, tubeMat);
+      tubeMesh.renderOrder = 999;
+      group.add(tubeMesh);
+
+      const labelDiv = document.createElement('div');
+      labelDiv.className = 'absolute z-50 pointer-events-none font-mono text-[11px] font-bold text-white bg-slate-900 border border-amber-500 rounded-full px-2 py-0.5 shadow transition-opacity whitespace-nowrap tracking-tight';
+      labelDiv.innerText = `${angle.toFixed(1)}°`;
+      labelDiv.style.transform = 'translate(-50%, -50%)';
+      labelDiv.style.opacity = '0';
+      this.container.appendChild(labelDiv);
+      const labelSprite = null;
+
+      scene.add(group);
+      this.viewer.viewer.Render();
+
+      const defaultIdAndName = `Angle_${this.nextPlanningObjectId++}`;
+      this.planningObjects.push({
+          id: defaultIdAndName,
+          name: defaultIdAndName,
+          type: 'angle',
+          mesh: group,
+          labelSprite,
+          p2: p2,
+          labelDiv,
+          p1: { x: p1.x, y: p1.y, z: p1.z },
+          p2Coord: { x: p2.x, y: p2.y, z: p2.z },
+          p3: { x: p3.x, y: p3.y, z: p3.z },
+          angle: angle,
+          color: '#d97706'
+      });
+  }
+
   updatePlanningObjectName(id: string, name: string) {
       const obj = this.planningObjects.find(o => o.id === id);
       if (!obj) return;
       obj.name = name;
       
-      if (obj.labelDiv && obj.baseDistance !== undefined) {
-          const text = obj.name ? `${obj.name} (${obj.baseDistance.toFixed(2)} mm)` : `${obj.baseDistance.toFixed(2)} mm`;
-          obj.labelDiv.innerText = text;
+      if (obj.labelDiv) {
+          if (obj.type === 'angle') {
+              const text = obj.name ? `${obj.name} (${obj.angle.toFixed(1)}°)` : `${obj.angle.toFixed(1)}°`;
+              obj.labelDiv.innerText = text;
+          } else if (obj.baseDistance !== undefined) {
+              const text = obj.name ? `${obj.name} (${obj.baseDistance.toFixed(2)} mm)` : `${obj.baseDistance.toFixed(2)} mm`;
+              obj.labelDiv.innerText = text;
+          }
       }
 
       if (this.config.onPlanningObjectsChange) {
@@ -1123,9 +1345,12 @@ export class ViewerManager {
 
       const width = obj.baseWidth + extSize;
       const height = obj.baseLength + extSize;
-      const renderThickness = Math.max(0.0, thickness);
+      const renderThickness = Math.abs(thickness);
 
+      // Create geometry centered at (0, 0, 0)
       const newGeometry = new THREE.BoxGeometry(width, height, renderThickness);
+      // Offset geometry locally by thickness/2 so it sits to one side or the other of the baseline/zero-plane
+      newGeometry.translate(0, 0, thickness / 2);
       obj.mesh.geometry = newGeometry;
 
       // Update line segments (wireframe outline overlay)
@@ -1227,6 +1452,36 @@ export class ViewerManager {
       this.saveToLocalStorage();
   }
 
+  updatePlanningPointDiameter(id: string, diameter: number) {
+      const obj = this.planningObjects.find(o => o.id === id);
+      if (!obj || obj.type !== 'point') return;
+      
+      const THREE = window.THREE;
+      if (!THREE) return;
+
+      if (obj.mesh.geometry) obj.mesh.geometry.dispose();
+
+      const radius = diameter / 2;
+      const newGeometry = new THREE.SphereGeometry(radius, 32, 32);
+      obj.mesh.geometry = newGeometry;
+      
+      // Update outline geometry
+      const toRemove = obj.mesh.children.filter((child: any) => child.isLineSegments || child.type === 'LineSegments');
+      toRemove.forEach((child: any) => obj.mesh.remove(child));
+
+      const edges = new THREE.EdgesGeometry(newGeometry);
+      const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x7e22ce, linewidth: 2, depthTest: false });
+      const line = new THREE.LineSegments(edges, edgeMaterial);
+      obj.mesh.add(line);
+      
+      obj.diameter = diameter;
+      
+      if (this.viewer?.viewer) {
+          try { this.viewer.viewer.Render(); } catch(e) {}
+      }
+      this.saveToLocalStorage();
+  }
+
   updatePlanningObjectTransform(id: string, updates: { posX?: number, posY?: number, posZ?: number, rotX?: number, rotY?: number, rotZ?: number }) {
       if (!window.THREE) return;
       const THREE = window.THREE;
@@ -1259,8 +1514,16 @@ export class ViewerManager {
              const scene = this.viewer.viewer.scene || this.viewer.viewer.mainScene;
              if (scene) {
                  scene.remove(obj.mesh);
-                 if (obj.mesh.geometry) obj.mesh.geometry.dispose();
-                 if (obj.mesh.material) obj.mesh.material.dispose();
+                 obj.mesh.traverse((child: any) => {
+                     if (child.geometry) child.geometry.dispose();
+                     if (child.material) {
+                         if (Array.isArray(child.material)) {
+                             child.material.forEach((m: any) => m.dispose());
+                         } else {
+                             child.material.dispose();
+                         }
+                     }
+                 });
 
                  if (obj.labelSprite) {
                      scene.remove(obj.labelSprite);
@@ -1454,11 +1717,12 @@ export class ViewerManager {
   }
 
   generateSTLString(obj: any, useModelCoordinates: boolean = true): string | null {
+      if (obj.type === 'measurement' || obj.type === 'angle') return null;
       if (!window.THREE) return null;
       const THREE = window.THREE;
       const mesh = obj.mesh;
-      const geometry = mesh.geometry;
-      if (!geometry.isBufferGeometry) return null;
+      const geometry = mesh?.geometry;
+      if (!geometry || !geometry.isBufferGeometry) return null;
       
       const cloneGeo = geometry.clone();
       
@@ -1554,6 +1818,13 @@ export class ViewerManager {
               new window.THREE.Vector3(obj.p2Coord.x, obj.p2Coord.y, obj.p2Coord.z),
               obj.angle
           );
+      } else if (obj.type === 'angle') {
+          this.createPlanningAngle(
+              new window.THREE.Vector3(obj.p1.x, obj.p1.y, obj.p1.z),
+              new window.THREE.Vector3(obj.p2Coord.x, obj.p2Coord.y, obj.p2Coord.z),
+              new window.THREE.Vector3(obj.p3.x, obj.p3.y, obj.p3.z),
+              obj.angle
+          );
       }
 
       if (this.planningObjects.length > 0) {
@@ -1609,29 +1880,29 @@ export class ViewerManager {
           const stl = this.generateSTLString(obj, true);
           if (stl) {
               zip.file(`${obj.name || obj.id}.stl`, stl);
-              const serializableObj = { ...obj };
-              delete serializableObj.mesh;
-              delete serializableObj.labelSprite;
-              delete serializableObj.labelDiv;
-              delete serializableObj.curvePath;
-              
-              metadataList.push({
-                  id: obj.id,
-                  name: obj.name || obj.id,
-                  type: obj.type,
-                  color: obj.color,
-                  baseDistance: obj.baseDistance,
-                  angle: obj.angle,
-                  groupId: obj.groupId || null,
-                  groupName: group.name,
-                  ...serializableObj,
-                  coordinateSystem: {
-                      systemType: "Loaded Model Local Coordinate Space",
-                      units: "millimeters (mm)",
-                      origin: "Aligned with loaded model origin (local space)"
-                  }
-              });
           }
+          const serializableObj = { ...obj };
+          delete serializableObj.mesh;
+          delete serializableObj.labelSprite;
+          delete serializableObj.labelDiv;
+          delete serializableObj.curvePath;
+          
+          metadataList.push({
+              id: obj.id,
+              name: obj.name || obj.id,
+              type: obj.type,
+              color: obj.color,
+              baseDistance: obj.baseDistance,
+              angle: obj.angle,
+              groupId: obj.groupId || null,
+              groupName: group.name,
+              ...serializableObj,
+              coordinateSystem: {
+                  systemType: "Loaded Model Local Coordinate Space",
+                  units: "millimeters (mm)",
+                  origin: "Aligned with loaded model origin (local space)"
+              }
+          });
       });
 
       const exportData = {
@@ -1681,29 +1952,29 @@ These files are ready to be aligned directly back into standard engineering and 
           const stl = this.generateSTLString(obj, true);
           if (stl) {
               zip.file(`${obj.name || obj.id}.stl`, stl);
-              const serializableObj = { ...obj };
-              delete serializableObj.mesh;
-              delete serializableObj.labelSprite;
-              delete serializableObj.labelDiv;
-              delete serializableObj.curvePath;
-
-              metadataList.push({
-                  id: obj.id,
-                  name: obj.name || obj.id,
-                  type: obj.type,
-                  color: obj.color,
-                  baseDistance: obj.baseDistance,
-                  angle: obj.angle,
-                  groupId: obj.groupId || null,
-                  groupName: obj.groupId ? (this.planningGroups.find(g => g.id === obj.groupId)?.name || '') : '',
-                  ...serializableObj,
-                  coordinateSystem: {
-                      systemType: "Loaded Model Local Coordinate Space",
-                      units: "millimeters (mm)",
-                      origin: "Aligned with loaded model origin (local space)"
-                  }
-              });
           }
+          const serializableObj = { ...obj };
+          delete serializableObj.mesh;
+          delete serializableObj.labelSprite;
+          delete serializableObj.labelDiv;
+          delete serializableObj.curvePath;
+
+          metadataList.push({
+              id: obj.id,
+              name: obj.name || obj.id,
+              type: obj.type,
+              color: obj.color,
+              baseDistance: obj.baseDistance,
+              angle: obj.angle,
+              groupId: obj.groupId || null,
+              groupName: obj.groupId ? (this.planningGroups.find(g => g.id === obj.groupId)?.name || '') : '',
+              ...serializableObj,
+              coordinateSystem: {
+                  systemType: "Loaded Model Local Coordinate Space",
+                  units: "millimeters (mm)",
+                  origin: "Aligned with loaded model origin (local space)"
+              }
+          });
       });
       
       const exportData = {
@@ -1816,6 +2087,18 @@ These files are ready to be aligned directly back into standard engineering and 
                       new window.THREE.Vector3(obj.p1.x, obj.p1.y, obj.p1.z),
                       new window.THREE.Vector3(obj.p2Coord.x, obj.p2Coord.y, obj.p2Coord.z),
                       obj.angle || 0
+                  );
+              } else if (obj.type === 'angle' && obj.p1 && obj.p2Coord && obj.p3) {
+                  this.createPlanningAngle(
+                      new window.THREE.Vector3(obj.p1.x, obj.p1.y, obj.p1.z),
+                      new window.THREE.Vector3(obj.p2Coord.x, obj.p2Coord.y, obj.p2Coord.z),
+                      new window.THREE.Vector3(obj.p3.x, obj.p3.y, obj.p3.z),
+                      obj.angle || 0
+                  );
+              } else if (obj.type === 'point' && obj.points && obj.points.length > 0) {
+                  this.createPlanningPoint(
+                      new window.THREE.Vector3(obj.points[0].x, obj.points[0].y, obj.points[0].z),
+                      obj.diameter || 0.2
                   );
               } else {
                  console.warn("Unsupported or missing data for planning object:", obj);
@@ -2226,7 +2509,7 @@ These files are ready to be aligned directly back into standard engineering and 
             // Update Planning Object Overlays
             if (this.planningObjects) {
                 this.planningObjects.forEach(obj => {
-                    if (obj.type === 'measurement' && obj.labelDiv && obj.p2) {
+                    if ((obj.type === 'measurement' || obj.type === 'angle') && obj.labelDiv && obj.p2) {
                         const screen = this.projectToScreen(obj.p2);
                         if (screen && screen.z < 1) { // z < 1 means in front of camera
                             obj.labelDiv.style.left = `${screen.x}px`;
@@ -2423,10 +2706,17 @@ These files are ready to be aligned directly back into standard engineering and 
       };
 
       this.planningObjects.forEach(obj => {
-          if (obj.type === 'measurement' && obj.visible !== false && obj.p2) {
+          if ((obj.type === 'measurement' || obj.type === 'angle') && obj.visible !== false && obj.p2) {
               const proj = projectToTargetSize(obj.p2, width, height, v.camera);
               if (proj && proj.z < 1) {
-                  const text = obj.labelDiv ? obj.labelDiv.innerText : (obj.name ? `${obj.name} (${obj.baseDistance.toFixed(2)} mm)` : `${obj.baseDistance.toFixed(2)} mm`);
+                  let text = '';
+                  let borderColor = '#10b981';
+                  if (obj.type === 'angle') {
+                      text = obj.name ? `${obj.name} (${obj.angle.toFixed(1)}°)` : `${obj.angle.toFixed(1)}°`;
+                      borderColor = '#d97706';
+                  } else {
+                      text = obj.name ? `${obj.name} (${obj.baseDistance.toFixed(2)} mm)` : `${obj.baseDistance.toFixed(2)} mm`;
+                  }
                   
                   ctx.save();
                   ctx.font = `bold ${Math.round(11 * scaleFactor)}px monospace`;
@@ -2447,7 +2737,7 @@ These files are ready to be aligned directly back into standard engineering and 
                   
                   // Draw capsule background pill
                   ctx.fillStyle = 'rgba(15, 23, 42, 0.9)'; // Dark slate-900 background
-                  ctx.strokeStyle = '#10b981'; // Emerald-500 border
+                  ctx.strokeStyle = borderColor;
                   ctx.lineWidth = 1 * scaleFactor;
                   
                   ctx.beginPath();

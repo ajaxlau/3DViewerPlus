@@ -20,8 +20,16 @@ export function ViewerCanvas() {
   };
 
   useEffect(() => {
-    const handleDragEnter = (e: DragEvent) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); };
-    const handleDragOver = (e: DragEvent) => { e.preventDefault(); e.stopPropagation(); setIsDragging(true); };
+    const handleDragEnter = (e: DragEvent) => { 
+      const isFile = e.dataTransfer?.types.includes('Files');
+      if (!isFile) return;
+      e.preventDefault(); e.stopPropagation(); setIsDragging(true); 
+    };
+    const handleDragOver = (e: DragEvent) => { 
+      const isFile = e.dataTransfer?.types.includes('Files');
+      if (!isFile) return;
+      e.preventDefault(); e.stopPropagation(); setIsDragging(true); 
+    };
     const handleDragLeave = (e: DragEvent) => { 
       e.preventDefault(); e.stopPropagation(); 
       if (e.relatedTarget === null || (e.relatedTarget as Node).nodeName === 'HTML') setIsDragging(false); 
