@@ -7,7 +7,8 @@ export function Sidebar({ collapsed }: { collapsed: boolean }) {
     status, filename, meshes, globalOpacity, setGlobalOpacity, 
     toggleMeshVisibility, setMeshOpacity, highlightMesh, highlightedMeshId,
     isClipping, setIsClipping, clipPlanes, updateClipPlane,
-    explodeValue, setExplodeValue, isEmpty, isAutoRotating, setIsAutoRotating
+    explodeValue, setExplodeValue, isEmpty, isAutoRotating, setIsAutoRotating,
+    backgroundImage, setBackgroundImage, backgroundOpacity, setBackgroundOpacity
   } = useViewer();
 
   const [meshVisOpen, setMeshVisOpen] = useState(true);
@@ -164,6 +165,51 @@ export function Sidebar({ collapsed }: { collapsed: boolean }) {
                   <span className="slider"></span>
                 </label>
               </div>
+            </div>
+
+            <div className="border-l-2 border-indigo-500 pl-3">
+              <div className="flex justify-between items-center mb-2">
+                <label className="text-[10px] text-slate-500 dark:text-slate-400 uppercase tracking-widest font-semibold">Background Picture</label>
+                {backgroundImage && (
+                  <button onClick={() => setBackgroundImage(null)} className="text-[9px] text-red-500 uppercase tracking-wider font-bold">Clear</button>
+                )}
+              </div>
+              {!backgroundImage ? (
+                <div 
+                  className="w-full border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-lg p-4 text-center cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors"
+                  onClick={() => {
+                    document.getElementById('bg-paste-capture')?.focus();
+                  }}
+                >
+                  <input type="text" id="bg-paste-capture" className="absolute opacity-0 w-0 h-0" onPaste={(e) => {
+                    const items = e.clipboardData.items;
+                    for (let i = 0; i < items.length; i++) {
+                      if (items[i].type.indexOf('image') !== -1) {
+                        const blob = items[i].getAsFile();
+                        if (blob) {
+                          const url = URL.createObjectURL(blob);
+                          setBackgroundImage(url);
+                        }
+                      }
+                    }
+                  }} />
+                  <span className="text-[10px] text-slate-400 font-medium select-none pointer-events-none">Click & Ctrl+V to paste</span>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2 mt-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider">Opacity</span>
+                    <span className="text-[10px] font-mono text-slate-500">{Math.round(backgroundOpacity * 100)}%</span>
+                  </div>
+                  <input 
+                    type="range" 
+                    min="0" max="1" step="0.01" 
+                    value={backgroundOpacity} 
+                    onChange={(e) => setBackgroundOpacity(parseFloat(e.target.value))}
+                    className="w-full cursor-pointer" 
+                  />
+                </div>
+              )}
             </div>
           </div>
         )}

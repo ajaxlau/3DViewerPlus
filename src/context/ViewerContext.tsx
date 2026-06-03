@@ -53,6 +53,11 @@ interface ViewerContextState {
   planningPointsPicked: number;
   measurement: { distance: number, angle: number } | null;
 
+  backgroundImage: string | null;
+  setBackgroundImage: (url: string | null) => void;
+  backgroundOpacity: number;
+  setBackgroundOpacity: (opacity: number) => void;
+
   setContainerRef: (ref: HTMLElement | null) => void;
   setRulerRefs: (topRef?: HTMLCanvasElement | null, leftRef?: HTMLCanvasElement | null) => void;
 }
@@ -89,6 +94,9 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
   const [planningPointsPicked, setPlanningPointsPicked] = useState(0);
   const [measurement, setMeasurement] = useState<{ distance: number, angle: number } | null>(null);
 
+  const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
+  const [backgroundOpacity, setBackgroundOpacity] = useState<number>(0.5);
+
   const setPlanningMode = (mode: 'none' | 'plane' | 'cylinder' | 'measure' | 'curve' | 'angle' | 'point') => {
     setPlanningModeState(mode);
     if (viewerManager) {
@@ -117,13 +125,19 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
     };
   }, [viewerManager]);
 
+  useEffect(() => {
+    if (viewerManager) {
+      viewerManager.setTheme(theme, backgroundImage !== null);
+    }
+  }, [backgroundImage, theme, viewerManager]);
+
   const setTheme = (newTheme: 'light' | 'dark') => {
     setThemeState(newTheme);
     if (newTheme === 'dark') document.documentElement.classList.add('dark');
     else document.documentElement.classList.remove('dark');
     
     if (viewerManager) {
-      viewerManager.setTheme(newTheme);
+      viewerManager.setTheme(newTheme, backgroundImage !== null);
     }
   };
 
@@ -145,7 +159,7 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
       });
       const isDark = document.documentElement.classList.contains('dark') || 
                     (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
-      manager.setTheme(isDark ? 'dark' : 'light');
+      manager.setTheme(isDark ? 'dark' : 'light', backgroundImage !== null);
       if (topRulerRef.current && leftRulerRef.current) {
         manager.setRulerCanvases(topRulerRef.current, leftRulerRef.current);
       }
@@ -236,6 +250,7 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
       planningMode, setPlanningMode, planningObjects, setPlanningObjects, planningPointsPicked,
       planningGroups, setPlanningGroups,
       measurement,
+      backgroundImage, setBackgroundImage, backgroundOpacity, setBackgroundOpacity,
       setContainerRef, setRulerRefs
     }}>
       {children}

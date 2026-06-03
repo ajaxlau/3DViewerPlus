@@ -3,7 +3,11 @@ import { useViewer } from '../context/ViewerContext';
 import { BoxSelect, Camera } from 'lucide-react';
 
 export function ViewerCanvas() {
-  const { setContainerRef, setRulerRefs, isEmpty, rulersVisible, viewerManager, filename, setActiveModal } = useViewer();
+  const { 
+    setContainerRef, setRulerRefs, isEmpty, rulersVisible, 
+    viewerManager, filename, setActiveModal,
+    backgroundImage, backgroundOpacity 
+  } = useViewer();
   const [isDragging, setIsDragging] = useState(false);
   
   const handleOpenFiles = () => {
@@ -80,10 +84,20 @@ export function ViewerCanvas() {
 
   return (
     <main className="flex-1 w-full h-full relative bg-white dark:bg-slate-950 flex items-center justify-center overflow-hidden">
+      {/* Background Image Reference */}
+      {backgroundImage && (
+        <img 
+          src={backgroundImage} 
+          alt="Reference Background" 
+          className="absolute inset-0 w-full h-full object-contain pointer-events-none transition-opacity duration-200"
+          style={{ opacity: backgroundOpacity, zIndex: 0 }}
+        />
+      )}
+
       {/* 3D Canvas Container */}
       <div 
         ref={(el) => setContainerRef(el)}
-        className="w-full h-full outline-none absolute inset-0 mix-blend-normal"
+        className="w-full h-full outline-none absolute inset-0 mix-blend-normal z-10"
         id="viewer-container"
       />
       

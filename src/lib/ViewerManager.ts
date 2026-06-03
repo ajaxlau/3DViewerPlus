@@ -73,17 +73,29 @@ export class ViewerManager {
     this.setupRaycaster();
   }
 
-  setTheme(theme: 'light' | 'dark') {
+  setTheme(theme: 'light' | 'dark', forceTransparentBg: boolean = false) {
     this.theme = theme;
     this.lastCameraState = '';
     if (this.viewer && this.viewer.viewer) {
-      const color = theme === 'dark' 
-        ? new window.OV.RGBAColor(2, 6, 23, 255) 
-        : new window.OV.RGBAColor(255, 255, 255, 255);
-      try { 
-        this.viewer.viewer.SetBackgroundColor(color); 
-        this.viewer.viewer.Render(); 
-      } catch(e) {}
+      if (forceTransparentBg) {
+        try {
+          if (this.viewer.viewer.renderer) {
+            this.viewer.viewer.renderer.setClearAlpha(0);
+            this.viewer.viewer.Render();
+          }
+        } catch(e) {}
+      } else {
+        const color = theme === 'dark' 
+          ? new window.OV.RGBAColor(2, 6, 23, 255) 
+          : new window.OV.RGBAColor(255, 255, 255, 255);
+        try { 
+          this.viewer.viewer.SetBackgroundColor(color); 
+          if (this.viewer.viewer.renderer) {
+            this.viewer.viewer.renderer.setClearAlpha(1);
+          }
+          this.viewer.viewer.Render(); 
+        } catch(e) {}
+      }
     }
   }
 

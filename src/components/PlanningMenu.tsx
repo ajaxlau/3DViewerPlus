@@ -684,7 +684,7 @@ function PlanningObjectItem({ obj, viewerManager }: { obj: any, viewerManager: a
                       className="text-[12px] font-bold bg-transparent border-none focus:bg-white dark:focus:bg-slate-950 focus:ring-1 focus:ring-blue-500 rounded px-1.5 py-0.5 w-full flex-1 min-w-0 placeholder-slate-400"
                       style={{ color: obj.color, textShadow: '0 0 1px rgba(0,0,0,0.1)' }}
                       placeholder="Edit object name..."
-                      value={obj.name || obj.id}
+                      value={obj.name ?? obj.id}
                       onChange={(e) => viewerManager.updatePlanningObjectName(obj.id, e.target.value)}
                   />
                   <div className="px-1.5 leading-tight mt-0.5 text-slate-800 dark:text-slate-300 flex items-center gap-1 overflow-x-auto scrollbar-none">
