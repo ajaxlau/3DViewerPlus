@@ -58,6 +58,9 @@ interface ViewerContextState {
   backgroundOpacity: number;
   setBackgroundOpacity: (opacity: number) => void;
 
+  isTransformActive: boolean;
+  transformMode: 'translate' | 'rotate' | 'scale';
+
   setContainerRef: (ref: HTMLElement | null) => void;
   setRulerRefs: (topRef?: HTMLCanvasElement | null, leftRef?: HTMLCanvasElement | null) => void;
 }
@@ -96,6 +99,9 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
 
   const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
   const [backgroundOpacity, setBackgroundOpacity] = useState<number>(0.5);
+
+  const [isTransformActive, setIsTransformActive] = useState(false);
+  const [transformMode, setTransformMode] = useState<'translate' | 'rotate' | 'scale'>('translate');
 
   const setPlanningMode = (mode: 'none' | 'plane' | 'cylinder' | 'measure' | 'curve' | 'angle' | 'point') => {
     setPlanningModeState(mode);
@@ -155,7 +161,9 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
         onPlanningObjectsChange: (objects) => setPlanningObjects([...objects]),
         onPlanningGroupsChange: (groups) => setPlanningGroups([...groups]),
         onPlanningPointsChange: (count) => setPlanningPointsPicked(count),
-        onMeasurementChange: (m) => setMeasurement(m)
+        onMeasurementChange: (m) => setMeasurement(m),
+        onTransformActiveChange: (active) => setIsTransformActive(active),
+        onTransformModeChange: (mode) => setTransformMode(mode as any)
       });
       const isDark = document.documentElement.classList.contains('dark') || 
                     (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -251,6 +259,7 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
       planningGroups, setPlanningGroups,
       measurement,
       backgroundImage, setBackgroundImage, backgroundOpacity, setBackgroundOpacity,
+      isTransformActive, transformMode,
       setContainerRef, setRulerRefs
     }}>
       {children}

@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react';
 import { useViewer } from '../context/ViewerContext';
-import { BoxSelect, Camera } from 'lucide-react';
+import { BoxSelect, Camera, Move, RotateCw, Scaling } from 'lucide-react';
 
 export function ViewerCanvas() {
   const { 
     setContainerRef, setRulerRefs, isEmpty, rulersVisible, 
     viewerManager, filename, setActiveModal,
-    backgroundImage, backgroundOpacity 
+    backgroundImage, backgroundOpacity,
+    isTransformActive, transformMode
   } = useViewer();
   const [isDragging, setIsDragging] = useState(false);
   
@@ -101,6 +102,26 @@ export function ViewerCanvas() {
         id="viewer-container"
       />
       
+      {/* Transform Floating Buttons */}
+      {isTransformActive && (
+        <div className="absolute top-4 right-4 z-20 flex bg-white/90 dark:bg-slate-800/90 backdrop-blur shadow-md rounded-md p-1 border border-slate-200 dark:border-slate-700">
+            <button
+              onClick={() => viewerManager?.setTransformMode('translate')}
+              className={`p-2 rounded ${transformMode === 'translate' ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50'} transition-colors`}
+              title="Translate"
+            >
+              <Move size={18} />
+            </button>
+            <button
+              onClick={() => viewerManager?.setTransformMode('rotate')}
+              className={`p-2 rounded ${transformMode === 'rotate' ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50'} transition-colors`}
+              title="Rotate"
+            >
+              <RotateCw size={18} />
+            </button>
+        </div>
+      )}
+
       {/* Floating Action Buttons */}
       {!isEmpty && (
         <button

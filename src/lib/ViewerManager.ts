@@ -13,6 +13,8 @@ export interface ViewerManagerConfig {
   onPlanningPointsChange?: (count: number) => void;
   onMeasurementChange?: (measurement: { distance: number, angle: number } | null) => void;
   onPlanningGroupsChange?: (groups: any[]) => void;
+  onTransformActiveChange?: (active: boolean) => void;
+  onTransformModeChange?: (mode: string) => void;
 }
 
 export class ViewerManager {
@@ -25,6 +27,7 @@ export class ViewerManager {
   originalColors: Map<any, any> = new Map();
   highlightedMesh: any = null;
   treeParseInterval: any = null;
+  transformControl: any = null;
 
   // Planning Tools state
   planningMode: 'none' | 'plane' | 'cylinder' | 'measure' | 'curve' | 'angle' | 'point' = 'none';
@@ -36,6 +39,7 @@ export class ViewerManager {
   nextPlanningObjectId: number = 1;
   defaultCamera: any = null;
   loadedFilename: string | null = null;
+  loadedUrl: string | null = null;
 
   // Clipping state
   modelBBox: any = null;
@@ -118,6 +122,8 @@ export class ViewerManager {
       });
       this.enforceFreeOrbit();
 
+      this.initTransformControls();
+
       this.resizeObserver = new ResizeObserver(() => {
         if (this.viewer) this.viewer.Resize();
         if (this.rulersVisible) {
@@ -146,7 +152,14 @@ export class ViewerManager {
   enforceFreeOrbit() {
     if (!this.viewer || !this.viewer.viewer || !this.viewer.viewer.navigation) return;
     try {
-      this.viewer.viewer.navigation.fixUpVector = false;
+      if (typeof this.viewer.viewer.navigation.SetNavigationMode === 'function') {
+        const freeOrbitMode = (window.OV && window.OV.NavigationMode && window.OV.NavigationMode.FreeOrbit) ? window.OV.NavigationMode.FreeOrbit : 2;
+        this.viewer.viewer.navigation.SetNavigationMode(freeOrbitMode);
+      } else {
+        this.viewer.viewer.navigation.fixUpVector = false;
+        this.viewer.viewer.navigation.navigationMode = 2;
+      }
+      
       const cam = this.viewer.viewer.navigation.camera;
       if (cam && cam.up && typeof this.viewer.viewer.SetUpVector === 'function') {
         this.viewer.viewer.SetUpVector(cam.up, false);
@@ -155,6 +168,127 @@ export class ViewerManager {
     if (this.viewer.viewer.scene) {
       try { this.viewer.viewer.Render(); } catch(e) {}
     }
+  }
+
+  initTransformControls() {
+    if (!window.THREE || !window.THREE.TransformControls || !this.viewer?.viewer?.camera || !this.viewer?.viewer?.renderer) return;
+    const v = this.viewer.viewer;
+    const scene = v.scene || v.mainScene;
+    if (!scene) return;
+
+    if (this.transformControl) {
+        scene.remove(this.transformControl);
+        scene.add(this.transformControl);
+        return;
+    }
+
+    if (v.navigation && !v.navigation._patchedForTransform) {
+        v.navigation._patchedForTransform = true;
+        const origOrbit = v.navigation.Orbit;
+        if (typeof origOrbit === 'function') {
+            v.navigation.Orbit = function(x: number, y: number) {
+                if (v.navigation.isTransforming) return;
+                origOrbit.call(this, x, y);
+            };
+        }
+        const origPan = v.navigation.Pan;
+        if (typeof origPan === 'function') {
+            v.navigation.Pan = function(x: number, y: number) {
+                if (v.navigation.isTransforming) return;
+                origPan.call(this, x, y);
+            };
+        }
+        const origZoom = v.navigation.Zoom;
+        if (typeof origZoom === 'function') {
+            v.navigation.Zoom = function(val: number) {
+                if (v.navigation.isTransforming) return;
+                origZoom.call(this, val);
+            };
+        }
+    }
+
+    this.transformControl = new window.THREE.TransformControls(v.camera, v.renderer.domElement);
+    this.transformControl.setSpace('local');
+    this.transformControl.userData = this.transformControl.userData || {};
+    this.transformControl.userData.isCustomOverlay = true;
+    
+    scene.add(this.transformControl);
+
+    // Block online3dviewer navigation if hovering over transform gizmo
+    const blockNav = (e: Event) => {
+        if (this.transformControl && this.transformControl.axis !== null) {
+            e.stopPropagation();
+        }
+    };
+    if (v.renderer?.domElement) {
+        v.renderer.domElement.addEventListener('mousedown', blockNav, true);
+        v.renderer.domElement.addEventListener('touchstart', blockNav, true);
+    }
+    
+    const broadcastTransformChange = () => {
+        if (!this.transformControl || !this.transformControl.object) return;
+        const mesh = this.transformControl.object as any;
+        const index = this.planningObjects.findIndex(o => o.mesh === mesh);
+        if (index !== -1) {
+            const oldObj = this.planningObjects[index];
+            const THREE = window.THREE;
+            let outPos = { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z };
+            let outQuat = { x: mesh.quaternion.x, y: mesh.quaternion.y, z: mesh.quaternion.z, w: mesh.quaternion.w };
+            
+            if (THREE) {
+                const modelRoot = this.getModelRoot();
+                let m = mesh.matrixWorld.clone();
+                if (modelRoot) {
+                    modelRoot.updateMatrixWorld(true);
+                    const invMain = modelRoot.matrixWorld.clone().invert();
+                    m.premultiply(invMain);
+                }
+                const pos = new THREE.Vector3();
+                const quat = new THREE.Quaternion();
+                const scale = new THREE.Vector3();
+                m.decompose(pos, quat, scale);
+                outPos = { x: pos.x, y: pos.y, z: pos.z };
+                outQuat = { x: quat.x, y: quat.y, z: quat.z, w: quat.w };
+            }
+
+            const newObj = {
+                ...oldObj,
+                posX: outPos.x,
+                posY: outPos.y,
+                posZ: outPos.z,
+                rotQx: outQuat.x,
+                rotQy: outQuat.y,
+                rotQz: outQuat.z,
+                rotQw: outQuat.w
+            };
+            this.planningObjects[index] = newObj;
+        }
+    };
+
+    this.transformControl.addEventListener('change', () => {
+        try { 
+            if (this.transformControl && this.transformControl.object) {
+                this.transformControl.object.updateMatrixWorld(true);
+            }
+            v.Render(); 
+        } catch(e){}
+        broadcastTransformChange();
+        if (this.config.onPlanningObjectsChange) {
+            this.config.onPlanningObjectsChange([...this.planningObjects]);
+        }
+    });
+    this.transformControl.addEventListener('dragging-changed', (event: any) => {
+       if (v.navigation) {
+           v.navigation.isTransforming = event.value;
+       }
+       if (!event.value) {
+           broadcastTransformChange();
+           if (this.config.onPlanningObjectsChange) {
+               this.config.onPlanningObjectsChange([...this.planningObjects]);
+           }
+           this.saveToLocalStorage();
+       }
+    });
   }
 
   fitToWindow() {
@@ -239,7 +373,14 @@ export class ViewerManager {
           type: obj.type,
           color: obj.color,
           groupId: obj.groupId,
-          visible: obj.visible !== false
+          visible: obj.visible !== false,
+          posX: obj.mesh?.position?.x,
+          posY: obj.mesh?.position?.y,
+          posZ: obj.mesh?.position?.z,
+          rotQx: obj.mesh?.quaternion?.x,
+          rotQy: obj.mesh?.quaternion?.y,
+          rotQz: obj.mesh?.quaternion?.z,
+          rotQw: obj.mesh?.quaternion?.w
         };
         if (obj.type === 'plane') {
           return {
@@ -291,6 +432,8 @@ export class ViewerManager {
   loadFromLocalStorage() {
     if (!this.loadedFilename) return;
     try {
+      this.clearAllPlanningObjects(false);
+
       // Load groups first
       const groupsStr = localStorage.getItem(`3dpo_planning_groups_${this.loadedFilename}`);
       if (groupsStr) {
@@ -312,9 +455,22 @@ export class ViewerManager {
       const THREE = window.THREE;
       if (!THREE) return;
 
-      this.clearAllPlanningObjects();
-
       parsed.forEach(obj => {
+        const prepareCreatedObj = (created: any) => {
+            if (created) {
+              created.id = obj.id;
+              created.name = obj.name;
+              created.color = obj.color;
+              created.groupId = obj.groupId;
+              created.visible = obj.visible !== false;
+              if (created.mesh) {
+                if (obj.posX !== undefined) created.mesh.position.set(obj.posX, obj.posY, obj.posZ);
+                if (obj.rotQx !== undefined) created.mesh.quaternion.set(obj.rotQx, obj.rotQy, obj.rotQz, obj.rotQw);
+                created.mesh.visible = created.visible;
+              }
+            }
+        };
+
         try {
           if (obj.type === 'plane') {
             const p1Val = new THREE.Vector3(obj.p1.x, obj.p1.y, obj.p1.z);
@@ -324,18 +480,9 @@ export class ViewerManager {
             this.createPlanningPlane(p1Val, p2Val, p3Val, obj.extWidth, obj.extLength);
             
             const created = this.planningObjects[this.planningObjects.length - 1];
-            if (created) {
-              created.id = obj.id;
-              created.name = obj.name;
-              created.color = obj.color || '#00ff00';
-              created.groupId = obj.groupId;
-              created.visible = obj.visible !== false;
-              if (obj.thickness !== undefined) {
+            prepareCreatedObj(created);
+            if (created && obj.thickness !== undefined) {
                 this.updatePlaneGeometry(created.id, obj.extWidth || 0, obj.thickness);
-              }
-              if (created.mesh) {
-                created.mesh.visible = created.visible;
-              }
             }
           } else if (obj.type === 'cylinder') {
             const p1Val = new THREE.Vector3(obj.p1.x, obj.p1.y, obj.p1.z);
@@ -344,32 +491,16 @@ export class ViewerManager {
             this.createPlanningCylinder(p1Val, p2Val, obj.diameter / 2, obj.extension);
             
             const created = this.planningObjects[this.planningObjects.length - 1];
-            if (created) {
-              created.id = obj.id;
-              created.name = obj.name;
-              created.color = obj.color || '#0000ff';
-              created.groupId = obj.groupId;
-              created.visible = obj.visible !== false;
-              if (created.mesh) {
-                created.mesh.visible = created.visible;
-              }
-            }
+            if (created) { created.color = created.color || '#0000ff'; }
+            prepareCreatedObj(created);
           } else if (obj.type === 'curve') {
             const pts = obj.points.map((p: any) => new THREE.Vector3(p.x, p.y, p.z));
             
             this.createPlanningCurve(pts, obj.thickness);
             
             const created = this.planningObjects[this.planningObjects.length - 1];
-            if (created) {
-              created.id = obj.id;
-              created.name = obj.name;
-              created.color = obj.color || '#db2777';
-              created.groupId = obj.groupId;
-              created.visible = obj.visible !== false;
-              if (created.mesh) {
-                created.mesh.visible = created.visible;
-              }
-            }
+            if (created) { created.color = created.color || '#db2777'; }
+            prepareCreatedObj(created);
           } else if (obj.type === 'measurement') {
             const p1Val = new THREE.Vector3(obj.p1.x, obj.p1.y, obj.p1.z);
             const p2Val = new THREE.Vector3(obj.p2Coord.x, obj.p2Coord.y, obj.p2Coord.z);
@@ -377,20 +508,12 @@ export class ViewerManager {
             this.createPlanningMeasurement(p1Val, p2Val, obj.angle || 0);
             
             const created = this.planningObjects[this.planningObjects.length - 1];
-            if (created) {
-              created.id = obj.id;
-              created.name = obj.name;
-              created.color = obj.color || '#10b981';
-              created.groupId = obj.groupId;
-              created.visible = obj.visible !== false;
-              if (created.mesh) {
-                created.mesh.visible = created.visible;
-              }
-              if (created.labelDiv && created.baseDistance !== undefined) {
+            if (created) { created.color = created.color || '#10b981'; }
+            prepareCreatedObj(created);
+            if (created && created.labelDiv && created.baseDistance !== undefined) {
                 const text = created.name ? `${created.name} (${created.baseDistance.toFixed(2)} mm)` : `${created.baseDistance.toFixed(2)} mm`;
                 created.labelDiv.innerText = text;
                 created.labelDiv.style.display = created.visible ? 'block' : 'none';
-              }
             }
           } else if (obj.type === 'angle') {
             const p1Val = new THREE.Vector3(obj.p1.x, obj.p1.y, obj.p1.z);
@@ -400,20 +523,12 @@ export class ViewerManager {
             this.createPlanningAngle(p1Val, p2Val, p3Val, obj.angle || 0);
             
             const created = this.planningObjects[this.planningObjects.length - 1];
-            if (created) {
-              created.id = obj.id;
-              created.name = obj.name;
-              created.color = obj.color || '#d97706';
-              created.groupId = obj.groupId;
-              created.visible = obj.visible !== false;
-              if (created.mesh) {
-                created.mesh.visible = created.visible;
-              }
-              if (created.labelDiv && created.angle !== undefined) {
+            if (created) { created.color = created.color || '#d97706'; }
+            prepareCreatedObj(created);
+            if (created && created.labelDiv && created.angle !== undefined) {
                 const text = created.name ? `${created.name} (${created.angle.toFixed(1)}°)` : `${created.angle.toFixed(1)}°`;
                 created.labelDiv.innerText = text;
                 created.labelDiv.style.display = created.visible ? 'block' : 'none';
-              }
             }
           } else if (obj.type === 'point') {
             const pVal = new THREE.Vector3(obj.points[0].x, obj.points[0].y, obj.points[0].z);
@@ -421,16 +536,8 @@ export class ViewerManager {
             this.createPlanningPoint(pVal, obj.diameter || 0.2);
             
             const created = this.planningObjects[this.planningObjects.length - 1];
-            if (created) {
-              created.id = obj.id;
-              created.name = obj.name;
-              created.color = obj.color || '#9333ea';
-              created.groupId = obj.groupId;
-              created.visible = obj.visible !== false;
-              if (created.mesh) {
-                created.mesh.visible = created.visible;
-              }
-            }
+            if (created) { created.color = created.color || '#9333ea'; }
+            prepareCreatedObj(created);
           }
         } catch (err) {
           console.warn("Failed to reconstruct serialized planning object", obj, err);
@@ -457,6 +564,7 @@ export class ViewerManager {
 
   loadFiles(files: FileList | File[]) {
     if (!files || files.length === 0) return;
+    this.loadedUrl = null;
     const fileArray = Array.from(files);
     const filename = fileArray[0].name;
 
@@ -471,6 +579,11 @@ export class ViewerManager {
 
   loadUrl(url: string, cameraArgs?: number[]) {
     if (!url) return;
+    if (this.loadedUrl === url) {
+      console.log("Model URL is already loaded or in progress of being loaded:", url);
+      return;
+    }
+    this.loadedUrl = url;
     const filename = url.split('/').pop()?.split('?')[0] || 'Remote Model';
 
     this.config.onStatusChange('Loading model from URL...', false, filename, url);
@@ -498,7 +611,9 @@ export class ViewerManager {
         if (scene) {
           scene.traverse((c: any) => { 
             if (c.isMesh && c.type !== "LineSegments" && c.type !== "EdgesGeometry") {
-                currentMeshCount++; 
+                if (!this.isCustomOverlay(c)) {
+                    currentMeshCount++; 
+                }
             }
           });
         }
@@ -545,6 +660,7 @@ export class ViewerManager {
                     );
                 } catch(e) { console.warn("Failed to set imported camera", e); }
             }
+            this.initTransformControls();
             this.enforceFreeOrbit();
             this.loadFromLocalStorage();
           }
@@ -563,6 +679,15 @@ export class ViewerManager {
     }, 500);
   }
 
+  isCustomOverlay(object: any): boolean {
+    let current = object;
+    while (current) {
+        if (current.userData && current.userData.isCustomOverlay) return true;
+        current = current.parent;
+    }
+    return false;
+  }
+
   buildModelTree() {
     this.clearHighlight();
     this.originalColors.clear();
@@ -574,6 +699,7 @@ export class ViewerManager {
     const meshInfos: any[] = [];
     scene.traverse((child: any) => {
       if (child.isMesh && child.type !== "LineSegments" && child.type !== "EdgesGeometry") {
+        if (this.isCustomOverlay(child)) return;
         this.currentMeshes.push(child);
         const meshIndex = this.currentMeshes.length - 1;
         
@@ -600,13 +726,14 @@ export class ViewerManager {
 
     scene.traverse((child: any) => {
         if (child.isMesh && child.type !== "LineSegments" && child.type !== "EdgesGeometry") {
+            if (this.isCustomOverlay(child)) return;
             if (child.material) {
                 const materials = Array.isArray(child.material) ? child.material : [child.material];
                 materials.forEach((mat: any) => {
-                    mat.transparent = val < 1.0;
-                    mat.opacity = val;
-                    mat.needsUpdate = true;
-                    mat.depthWrite = val === 1.0;
+                   mat.transparent = val < 1.0;
+                   mat.opacity = val;
+                   mat.needsUpdate = true;
+                   mat.depthWrite = val === 1.0;
                 });
             }
         }
@@ -644,7 +771,7 @@ export class ViewerManager {
     this.onPointerDown = (e: PointerEvent) => {
         pointerDownPos = { x: e.clientX, y: e.clientY };
     };
-    this.container.addEventListener('pointerdown', this.onPointerDown);
+    this.container.addEventListener('pointerdown', this.onPointerDown, { capture: true });
 
     this.onPointerUp = (e: PointerEvent) => {
         const dist = Math.sqrt(Math.pow(e.clientX - pointerDownPos.x, 2) + Math.pow(e.clientY - pointerDownPos.y, 2));
@@ -659,14 +786,61 @@ export class ViewerManager {
             const raycaster = new window.THREE.Raycaster();
             raycaster.setFromCamera(mouse, this.viewer.viewer.camera);
             
-            const intersects = raycaster.intersectObjects(this.currentMeshes, false);
-            const visibleHit = intersects.find((hit: any) => hit.object.visible);
+            const planningMeshes = this.planningMode === 'none' 
+                ? this.planningObjects.filter(o => o.type === 'plane' || o.type === 'cylinder').map(o => o.mesh).filter(Boolean)
+                : [];
+                
+            let scene = this.viewer.viewer.scene || this.viewer.viewer.mainScene;
+            if (!scene) return;
+            
+            const intersectsScene = raycaster.intersectObjects(scene.children, true);
+            const intersects = intersectsScene.filter((intersect: any) => {
+                let obj = intersect.object;
+                
+                // If we are evaluating hits against planning meshes (transforming tools)
+                let isPlanning = false;
+                let isTransformControl = false;
+                while (obj) {
+                    if (planningMeshes.includes(obj)) {
+                        isPlanning = true;
+                    }
+                    if (obj.userData && obj.userData.isCustomOverlay && !planningMeshes.includes(obj)) {
+                        isTransformControl = true;
+                    }
+                    if (!obj.visible) return false;
+                    obj = obj.parent;
+                }
+                
+                if (isTransformControl) return false;
+                if (isPlanning) return true;
+                
+                // If we are in a planning mode, we can only intersect model meshes (not overlays)
+                obj = intersect.object;
+                if (!obj.isMesh || obj.type === "LineSegments" || obj.type === "EdgesGeometry") {
+                    return false;
+                }
+                while (obj) {
+                    if (obj.userData && obj.userData.isCustomOverlay) return false;
+                    obj = obj.parent;
+                }
+                
+                return true;
+            }).sort((a: any, b: any) => a.distance - b.distance);
+            
+            // In Three.js, intersecting groups might return children. So we just need to backtrack to the root mesh.
+            const visibleHit = intersects.find((hit: any) => {
+                let obj = hit.object;
+                while (obj) {
+                    if (!obj.visible) return false;
+                    obj = obj.parent;
+                }
+                return true;
+            });
             
             if (this.planningMode !== 'none') {
                  if (visibleHit) {
                      let normal = null;
                      if (visibleHit.face && visibleHit.face.normal && window.THREE) {
-
                          normal = visibleHit.face.normal.clone();
                          normal.transformDirection(visibleHit.object.matrixWorld);
                      }
@@ -676,24 +850,81 @@ export class ViewerManager {
             }
 
             if (visibleHit) {
-                const hitMesh = visibleHit.object;
-                const idx = this.currentMeshes.indexOf(hitMesh);
-                if (this.highlightedMesh === hitMesh) {
+                // Find if the hit object is part of a planning mesh or current meshes
+                let hitPlanningMesh = null;
+                let hitCurrentMesh = null;
+                let obj = visibleHit.object;
+                
+                while (obj) {
+                    if (planningMeshes.includes(obj)) {
+                        hitPlanningMesh = obj;
+                        break;
+                    }
+                    if (this.currentMeshes.includes(obj)) {
+                        hitCurrentMesh = obj;
+                    }
+                    obj = obj.parent;
+                }
+
+                if (hitPlanningMesh) {
                     this.highlightMesh(null);
+                    if (this.transformControl) {
+                        this.transformControl.attach(hitPlanningMesh);
+                        if (this.config.onTransformActiveChange) this.config.onTransformActiveChange(true);
+                        this.viewer.viewer.Render();
+                    }
                 } else {
-                    this.highlightMesh(idx);
+                    if (this.transformControl) {
+                        this.transformControl.detach();
+                        if (this.config.onTransformActiveChange) this.config.onTransformActiveChange(false);
+                        this.viewer.viewer.Render();
+                    }
+                    const hitMesh = hitCurrentMesh || visibleHit.object;
+                    let idx = this.currentMeshes.indexOf(hitMesh);
+                    
+                    // Fallback: If it's still not found, check if it's identical by comparing it directly
+                    if (idx === -1) {
+                        idx = this.currentMeshes.findIndex(m => m === hitMesh);
+                    }
+                    
+                    if (this.highlightedMesh === hitMesh) {
+                        this.highlightMesh(null);
+                    } else if (idx !== -1) {
+                        this.highlightMesh(idx);
+                    }
                 }
             } else {
                 this.highlightMesh(null);
+                if (this.transformControl) {
+                    this.transformControl.detach();
+                    if (this.config.onTransformActiveChange) this.config.onTransformActiveChange(false);
+                    this.viewer.viewer.Render();
+                }
             }
         }
     };
-    this.container.addEventListener('pointerup', this.onPointerUp);
+    this.container.addEventListener('pointerup', this.onPointerUp, { capture: true });
+  }
+
+  setTransformMode(mode: 'translate' | 'rotate' | 'scale') {
+    if (this.transformControl) {
+      this.transformControl.setMode(mode);
+      this.transformControl.setSpace('local');
+      if (this.config.onTransformModeChange) this.config.onTransformModeChange(mode);
+      if (this.viewer?.viewer) {
+          try { this.viewer.viewer.Render(); } catch(e){}
+      }
+    }
   }
 
   setPlanningMode(mode: 'none' | 'plane' | 'cylinder' | 'measure' | 'curve' | 'angle' | 'point') {
       this.planningMode = mode;
       this.clearPlanningPoints();
+      if (mode !== 'none' && this.transformControl) {
+          this.transformControl.detach();
+          if (this.config.onTransformActiveChange) this.config.onTransformActiveChange(false);
+          if (this.viewer?.viewer) this.viewer.viewer.Render();
+      }
   }
 
   clearPlanningPoints() {
@@ -752,6 +983,7 @@ export class ViewerManager {
       const marker = new THREE.Mesh(geometry, material);
       marker.position.copy(point);
       marker.renderOrder = 999; 
+      marker.userData = { isCustomOverlay: true };
       scene.add(marker);
       this.planningPointMarkers.push(marker);
 
@@ -949,6 +1181,7 @@ export class ViewerManager {
       const line = new THREE.LineSegments(edges, lineMaterial);
       mesh.add(line);
 
+      mesh.userData = { isCustomOverlay: true };
       scene.add(mesh);
       this.viewer.viewer.Render();
 
@@ -1009,6 +1242,7 @@ export class ViewerManager {
       const line = new THREE.LineSegments(edges, lineMaterial);
       mesh.add(line);
 
+      mesh.userData = { isCustomOverlay: true };
       scene.add(mesh);
       this.viewer.viewer.Render();
 
@@ -1057,6 +1291,7 @@ export class ViewerManager {
       const line = new THREE.LineSegments(edges, lineMaterial);
       mesh.add(line);
 
+      mesh.userData = { isCustomOverlay: true };
       scene.add(mesh);
       this.viewer.viewer.Render();
 
@@ -1142,6 +1377,7 @@ export class ViewerManager {
       this.container.appendChild(labelDiv);
       const labelSprite = null;
 
+      mesh.userData = { isCustomOverlay: true };
       scene.add(mesh);
       this.viewer.viewer.Render();
 
@@ -1188,6 +1424,7 @@ export class ViewerManager {
       const line = new THREE.LineSegments(edges, edgeMaterial);
       mesh.add(line);
 
+      mesh.userData = { isCustomOverlay: true };
       scene.add(mesh);
       this.viewer.viewer.Render();
 
@@ -1279,6 +1516,7 @@ export class ViewerManager {
       this.container.appendChild(labelDiv);
       const labelSprite = null;
 
+      group.userData = { isCustomOverlay: true };
       scene.add(group);
       this.viewer.viewer.Render();
 
@@ -1367,7 +1605,15 @@ export class ViewerManager {
 
       // Update line segments (wireframe outline overlay)
       const toRemove = obj.mesh.children.filter((child: any) => child.isLineSegments || child.type === 'LineSegments');
-      toRemove.forEach((child: any) => obj.mesh.remove(child));
+      toRemove.forEach((child: any) => {
+          if (child.geometry && typeof child.geometry.dispose === 'function') {
+              try { child.geometry.dispose(); } catch(e){}
+          }
+          if (child.material && typeof child.material.dispose === 'function') {
+              try { child.material.dispose(); } catch(e){}
+          }
+          obj.mesh.remove(child);
+      });
 
       const edges = new THREE.EdgesGeometry(newGeometry);
       const lineMaterial = new THREE.LineBasicMaterial({ color: 0x00aa00, linewidth: 2, depthTest: false });
@@ -1406,7 +1652,15 @@ export class ViewerManager {
 
       // Update line segments (wireframe outline overlay)
       const toRemove = obj.mesh.children.filter((child: any) => child.isLineSegments || child.type === 'LineSegments');
-      toRemove.forEach((child: any) => obj.mesh.remove(child));
+      toRemove.forEach((child: any) => {
+          if (child.geometry && typeof child.geometry.dispose === 'function') {
+              try { child.geometry.dispose(); } catch(e){}
+          }
+          if (child.material && typeof child.material.dispose === 'function') {
+              try { child.material.dispose(); } catch(e){}
+          }
+          obj.mesh.remove(child);
+      });
 
       const edges = new THREE.EdgesGeometry(newGeometry);
       const lineMaterial = new THREE.LineBasicMaterial({ color: 0x0000aa, linewidth: 2, depthTest: false });
@@ -1445,7 +1699,15 @@ export class ViewerManager {
       obj.mesh.geometry = newGeometry;
       
       const toRemove = obj.mesh.children.filter((child: any) => child.isLineSegments || child.type === 'LineSegments');
-      toRemove.forEach((child: any) => obj.mesh.remove(child));
+      toRemove.forEach((child: any) => {
+          if (child.geometry && typeof child.geometry.dispose === 'function') {
+              try { child.geometry.dispose(); } catch(e){}
+          }
+          if (child.material && typeof child.material.dispose === 'function') {
+              try { child.material.dispose(); } catch(e){}
+          }
+          obj.mesh.remove(child);
+      });
 
       const edges = new THREE.EdgesGeometry(newGeometry);
       const lineMaterial = new THREE.LineBasicMaterial({ color: 0x9d174d, linewidth: 2, depthTest: false });
@@ -1479,7 +1741,15 @@ export class ViewerManager {
       
       // Update outline geometry
       const toRemove = obj.mesh.children.filter((child: any) => child.isLineSegments || child.type === 'LineSegments');
-      toRemove.forEach((child: any) => obj.mesh.remove(child));
+      toRemove.forEach((child: any) => {
+          if (child.geometry && typeof child.geometry.dispose === 'function') {
+              try { child.geometry.dispose(); } catch(e){}
+          }
+          if (child.material && typeof child.material.dispose === 'function') {
+              try { child.material.dispose(); } catch(e){}
+          }
+          obj.mesh.remove(child);
+      });
 
       const edges = new THREE.EdgesGeometry(newGeometry);
       const edgeMaterial = new THREE.LineBasicMaterial({ color: 0x7e22ce, linewidth: 2, depthTest: false });
@@ -1588,6 +1858,44 @@ export class ViewerManager {
     }
   }
 
+  duplicatePlanningGroup(groupId: string) {
+      const group = this.planningGroups.find(g => g.id === groupId);
+      if (!group) return;
+
+      // Find the next available suffix
+      let baseName = group.name;
+      // Strip existing suffix if it matches _N
+      const match = baseName.match(/^(.*)_(\d+)$/);
+      let nextNum = 1;
+      if (match) {
+          baseName = match[1];
+          nextNum = parseInt(match[2]) + 1;
+      }
+      
+      let newName = `${baseName}_${nextNum}`;
+      while (this.planningGroups.some(g => g.name === newName)) {
+          nextNum++;
+          newName = `${baseName}_${nextNum}`;
+      }
+
+      const newGroupId = this.addPlanningGroup(newName);
+      
+      // Duplicate all objects in the group
+      const objectsToDuplicate = this.planningObjects.filter(o => o.groupId === groupId);
+      for (const obj of objectsToDuplicate) {
+          const newObj = this.duplicatePlanningObject(obj.id, true);
+          if (newObj) {
+              newObj.groupId = newGroupId;
+          }
+      }
+      
+      this.notifyGroupsChanged();
+      if (this.config.onPlanningObjectsChange) {
+          this.config.onPlanningObjectsChange([...this.planningObjects]);
+      }
+      this.saveToLocalStorage();
+  }
+
   removePlanningGroup(groupId: string, deleteAssociated: boolean = false) {
     const idx = this.planningGroups.findIndex(g => g.id === groupId);
     if (idx > -1) {
@@ -1678,20 +1986,37 @@ export class ViewerManager {
     }
   }
 
-  clearAllPlanningObjects() {
+  clearAllPlanningObjects(save: boolean = true) {
       if (this.viewer && this.viewer.viewer) {
           const scene = this.viewer.viewer.scene || this.viewer.viewer.mainScene;
           if (scene) {
               this.planningObjects.forEach(obj => {
                   scene.remove(obj.mesh);
-                  if (obj.mesh.geometry) obj.mesh.geometry.dispose();
-                  if (obj.mesh.material) obj.mesh.material.dispose();
+                  if (obj.mesh) {
+                      obj.mesh.traverse((child: any) => {
+                          if (child.geometry && typeof child.geometry.dispose === 'function') {
+                              try { child.geometry.dispose(); } catch(e){}
+                          }
+                          if (child.material) {
+                              const mats = Array.isArray(child.material) ? child.material : [child.material];
+                              mats.forEach((m: any) => {
+                                  if (m && typeof m.dispose === 'function') {
+                                      try { m.dispose(); } catch(e){}
+                                  }
+                              });
+                          }
+                      });
+                  }
 
                   if (obj.labelSprite) {
                       scene.remove(obj.labelSprite);
                       if (obj.labelSprite.material) {
-                          if (obj.labelSprite.material.map) obj.labelSprite.material.map.dispose();
-                          obj.labelSprite.material.dispose();
+                          if (obj.labelSprite.material.map && typeof obj.labelSprite.material.map.dispose === 'function') {
+                              try { obj.labelSprite.material.map.dispose(); } catch(e){}
+                          }
+                          if (typeof obj.labelSprite.material.dispose === 'function') {
+                              try { obj.labelSprite.material.dispose(); } catch(e){}
+                          }
                       }
                   }
 
@@ -1701,14 +2026,16 @@ export class ViewerManager {
                       }
                   }
               });
-              this.viewer.viewer.Render();
+              try { this.viewer.viewer.Render(); } catch(e){}
           }
       }
       this.planningObjects = [];
       if (this.config.onPlanningObjectsChange) {
           this.config.onPlanningObjectsChange(this.planningObjects);
       }
-      this.saveToLocalStorage();
+      if (save) {
+          this.saveToLocalStorage();
+      }
   }
 
   getModelRoot() {
@@ -1738,11 +2065,13 @@ export class ViewerManager {
       
       const cloneGeo = geometry.clone();
       
+      if (mesh) mesh.updateMatrixWorld(true);
       let transformMatrix = mesh.matrixWorld.clone();
       let isModelAligned = false;
       if (useModelCoordinates) {
           const modelRoot = this.getModelRoot();
           if (modelRoot) {
+              modelRoot.updateMatrixWorld(true);
               const invModelMatrix = new THREE.Matrix4().copy(modelRoot.matrixWorld).invert();
               transformMatrix.premultiply(invModelMatrix);
               isModelAligned = true;
@@ -1796,10 +2125,12 @@ export class ViewerManager {
       return stl;
   }
 
-  duplicatePlanningObject(id: string) {
+  duplicatePlanningObject(id: string, isGroupDuplicate: boolean = false): any {
       const obj = this.planningObjects.find(o => o.id === id);
-      if (!obj || !window.THREE) return;
+      if (!obj || !window.THREE) return null;
       
+      const prevLength = this.planningObjects.length;
+
       if (obj.type === 'plane') {
           this.createPlanningPlane(
               new window.THREE.Vector3(obj.p1.x, obj.p1.y, obj.p1.z),
@@ -1808,7 +2139,7 @@ export class ViewerManager {
               obj.extWidth,
               obj.extLength
           );
-          if (this.planningObjects.length > 0) {
+          if (this.planningObjects.length > prevLength) {
               const newObj = this.planningObjects[this.planningObjects.length - 1];
               this.updatePlaneGeometry(newObj.id, obj.extWidth || 0, obj.thickness || 0);
           }
@@ -1837,11 +2168,16 @@ export class ViewerManager {
               new window.THREE.Vector3(obj.p3.x, obj.p3.y, obj.p3.z),
               obj.angle
           );
+      } else if (obj.type === 'point' && obj.points && obj.points.length > 0) {
+          this.createPlanningPoint(
+              new window.THREE.Vector3(obj.points[0].x, obj.points[0].y, obj.points[0].z),
+              obj.diameter || 0.2
+          );
       }
 
-      if (this.planningObjects.length > 0) {
+      if (this.planningObjects.length > prevLength) {
           const newObj = this.planningObjects[this.planningObjects.length - 1];
-          newObj.name = `${obj.name} (Copy)`;
+          newObj.name = isGroupDuplicate ? obj.name : `${obj.name} (Copy)`;
           newObj.groupId = obj.groupId;
           newObj.color = obj.color;
           if (newObj.mesh && newObj.mesh.material && window.THREE) {
@@ -1851,15 +2187,40 @@ export class ViewerManager {
                   newObj.mesh.material.color?.set(newObj.color);
               }
           }
+          if (newObj.mesh && obj.mesh) {
+              newObj.mesh.position.copy(obj.mesh.position);
+              newObj.mesh.quaternion.copy(obj.mesh.quaternion);
+              newObj.posX = obj.posX;
+              newObj.posY = obj.posY;
+              newObj.posZ = obj.posZ;
+              newObj.rotQx = obj.rotQx;
+              newObj.rotQy = obj.rotQy;
+              newObj.rotQz = obj.rotQz;
+              newObj.rotQw = obj.rotQw;
+          }
           if (obj.visible === false) {
              newObj.visible = false;
              if (newObj.mesh) newObj.mesh.visible = false;
           }
+          
+          if (newObj.labelDiv) {
+              if (newObj.type === 'measurement' && newObj.baseDistance !== undefined) {
+                  const text = newObj.name ? `${newObj.name} (${newObj.baseDistance.toFixed(2)} mm)` : `${newObj.baseDistance.toFixed(2)} mm`;
+                  newObj.labelDiv.innerText = text;
+              } else if (newObj.type === 'angle' && newObj.angle !== undefined) {
+                  const text = newObj.name ? `${newObj.name} (${newObj.angle.toFixed(1)}°)` : `${newObj.angle.toFixed(1)}°`;
+                  newObj.labelDiv.innerText = text;
+              }
+              newObj.labelDiv.style.display = newObj.visible ? 'block' : 'none';
+          }
+          
           if (this.config.onPlanningObjectsChange) {
-              this.config.onPlanningObjectsChange(this.planningObjects);
+              this.config.onPlanningObjectsChange([...this.planningObjects]);
           }
           this.saveToLocalStorage();
+          return newObj;
       }
+      return null;
   }
 
   exportPlanningObjectSTL(id: string) {
@@ -1899,16 +2260,138 @@ export class ViewerManager {
           delete serializableObj.labelDiv;
           delete serializableObj.curvePath;
           
+          const THREE = window.THREE;
+          let outPos = { x: obj.mesh?.position?.x, y: obj.mesh?.position?.y, z: obj.mesh?.position?.z };
+          let outQuat = { x: obj.mesh?.quaternion?.x, y: obj.mesh?.quaternion?.y, z: obj.mesh?.quaternion?.z, w: obj.mesh?.quaternion?.w };
+          let exportedObj = { ...serializableObj };
+
+          if (obj.mesh && THREE) {
+              obj.mesh.updateMatrixWorld(true);
+              const modelRoot = this.getModelRoot();
+              let m = obj.mesh.matrixWorld.clone();
+              
+              // RE-COMPUTE EXACT p1/p2 ENDPOINTS BASED ON MESH TRANSFORM
+              if (obj.type === 'cylinder') {
+                  const dist = obj.baseDistance || 0;
+                  const lp1 = new THREE.Vector3(0, -dist/2, 0);
+                  const lp2 = new THREE.Vector3(0, dist/2, 0);
+                  lp1.applyMatrix4(m);
+                  lp2.applyMatrix4(m);
+                  if (modelRoot) {
+                      const invModel = modelRoot.matrixWorld.clone().invert();
+                      lp1.applyMatrix4(invModel);
+                      lp2.applyMatrix4(invModel);
+                  }
+                  exportedObj.p1 = { x: lp1.x, y: lp1.y, z: lp1.z };
+                  exportedObj.p2 = { x: lp2.x, y: lp2.y, z: lp2.z };
+              } else if (obj.type === 'plane' && obj.p1 && obj.p2 && obj.p3) {
+                  // Find delta transform from original p1,p2,p3 logic
+                  const origCenter = new THREE.Vector3().addVectors(
+                      new THREE.Vector3(obj.p1.x, obj.p1.y, obj.p1.z),
+                      new THREE.Vector3(obj.p2.x, obj.p2.y, obj.p2.z)
+                  ).add(new THREE.Vector3(obj.p3.x, obj.p3.y, obj.p3.z)).divideScalar(3);
+                  
+                  const v1 = new THREE.Vector3().subVectors(new THREE.Vector3(obj.p2.x, obj.p2.y, obj.p2.z), new THREE.Vector3(obj.p1.x, obj.p1.y, obj.p1.z));
+                  const v2 = new THREE.Vector3().subVectors(new THREE.Vector3(obj.p3.x, obj.p3.y, obj.p3.z), new THREE.Vector3(obj.p1.x, obj.p1.y, obj.p1.z));
+                  const normal = new THREE.Vector3().crossVectors(v1, v2).normalize();
+                  const lineDir = new THREE.Vector3().copy(v1).normalize();
+                  const yAxis = new THREE.Vector3().crossVectors(normal, lineDir).normalize();
+                  const basis = new THREE.Matrix4().makeBasis(lineDir, yAxis, normal);
+                  const origQuat = new THREE.Quaternion().setFromRotationMatrix(basis);
+                  
+                  const mOrig = new THREE.Matrix4().compose(origCenter, origQuat, new THREE.Vector3(1,1,1));
+                  const mOrigInv = mOrig.invert();
+                  
+                  // Now calculate new p1, p2, p3
+                  const updateP = (pOrig: any) => {
+                      const pt = new THREE.Vector3(pOrig.x, pOrig.y, pOrig.z);
+                      pt.applyMatrix4(mOrigInv); // to local
+                      pt.applyMatrix4(m); // to new world
+                      if (modelRoot) {
+                         const invModel = modelRoot.matrixWorld.clone().invert();
+                         pt.applyMatrix4(invModel);
+                      }
+                      return { x: pt.x, y: pt.y, z: pt.z };
+                  };
+                  exportedObj.p1 = updateP(obj.p1);
+                  exportedObj.p2 = updateP(obj.p2);
+                  exportedObj.p3 = updateP(obj.p3);
+              } else if (obj.type === 'measurement' && obj.p1 && obj.p2Coord) {
+                  // similar logic might apply, but measurement shouldn't be scaled, just endpoints updated
+                  const origCenter = new THREE.Vector3().addVectors(
+                      new THREE.Vector3(obj.p1.x, obj.p1.y, obj.p1.z),
+                      new THREE.Vector3(obj.p2Coord.x, obj.p2Coord.y, obj.p2Coord.z)
+                  ).multiplyScalar(0.5);
+                  const dir = new THREE.Vector3().subVectors(new THREE.Vector3(obj.p2Coord.x, obj.p2Coord.y, obj.p2Coord.z), new THREE.Vector3(obj.p1.x, obj.p1.y, obj.p1.z)).normalize();
+                  const up = new THREE.Vector3(0,1,0);
+                  const q = new THREE.Quaternion().setFromUnitVectors(up, dir);
+                  const mOrigInv = new THREE.Matrix4().compose(origCenter, q, new THREE.Vector3(1,1,1)).invert();
+                  
+                  const updateP = (pOrig: any) => {
+                      const pt = new THREE.Vector3(pOrig.x, pOrig.y, pOrig.z);
+                      pt.applyMatrix4(mOrigInv).applyMatrix4(m);
+                      if (modelRoot) pt.applyMatrix4(modelRoot.matrixWorld.clone().invert());
+                      return { x: pt.x, y: pt.y, z: pt.z };
+                  };
+                  exportedObj.p1 = updateP(obj.p1);
+                  exportedObj.p2Coord = updateP(obj.p2Coord);
+              } else if (obj.type === 'point' && obj.points && obj.points.length > 0) {
+                  const mOrigInv = new THREE.Matrix4().makeTranslation(-obj.points[0].x, -obj.points[0].y, -obj.points[0].z);
+                  const updateP = (pOrig: any) => {
+                      const pt = new THREE.Vector3(pOrig.x, pOrig.y, pOrig.z);
+                      pt.applyMatrix4(mOrigInv).applyMatrix4(m);
+                      if (modelRoot) pt.applyMatrix4(modelRoot.matrixWorld.clone().invert());
+                      return { x: pt.x, y: pt.y, z: pt.z };
+                  };
+                  exportedObj.points = [updateP(obj.points[0])];
+              } else if (obj.type === 'curve' && obj.points) {
+                  const updateP = (pOrig: any) => {
+                      const pt = new THREE.Vector3(pOrig.x, pOrig.y, pOrig.z);
+                      pt.applyMatrix4(m);
+                      if (modelRoot) pt.applyMatrix4(modelRoot.matrixWorld.clone().invert());
+                      return { x: pt.x, y: pt.y, z: pt.z };
+                  };
+                  exportedObj.points = obj.points.map(updateP);
+              } else if (obj.type === 'angle' && obj.p1 && obj.p2Coord && obj.p3) {
+                  const updateP = (pOrig: any) => {
+                      const pt = new THREE.Vector3(pOrig.x, pOrig.y, pOrig.z);
+                      pt.applyMatrix4(m);
+                      if (modelRoot) pt.applyMatrix4(modelRoot.matrixWorld.clone().invert());
+                      return { x: pt.x, y: pt.y, z: pt.z };
+                  };
+                  exportedObj.p1 = updateP(obj.p1);
+                  exportedObj.p2Coord = updateP(obj.p2Coord);
+                  exportedObj.p3 = updateP(obj.p3);
+              }
+
+              if (modelRoot) {
+                  modelRoot.updateMatrixWorld(true);
+                  const invMain = modelRoot.matrixWorld.clone().invert();
+                  m.premultiply(invMain);
+              }
+              const pos = new THREE.Vector3();
+              const quat = new THREE.Quaternion();
+              const scale = new THREE.Vector3();
+              m.decompose(pos, quat, scale);
+              outPos = { x: pos.x, y: pos.y, z: pos.z };
+              outQuat = { x: quat.x, y: quat.y, z: quat.z, w: quat.w };
+          }
+          
           metadataList.push({
               id: obj.id,
               name: obj.name || obj.id,
               type: obj.type,
               color: obj.color,
-              baseDistance: obj.baseDistance,
-              angle: obj.angle,
               groupId: obj.groupId || null,
               groupName: group.name,
-              ...serializableObj,
+              ...exportedObj,
+              posX: outPos.x,
+              posY: outPos.y,
+              posZ: outPos.z,
+              rotQx: outQuat.x,
+              rotQy: outQuat.y,
+              rotQz: outQuat.z,
+              rotQw: outQuat.w,
               coordinateSystem: {
                   systemType: "Loaded Model Local Coordinate Space",
                   units: "millimeters (mm)",
@@ -1971,16 +2454,138 @@ These files are ready to be aligned directly back into standard engineering and 
           delete serializableObj.labelDiv;
           delete serializableObj.curvePath;
 
+          const THREE = window.THREE;
+          let outPos = { x: obj.mesh?.position?.x, y: obj.mesh?.position?.y, z: obj.mesh?.position?.z };
+          let outQuat = { x: obj.mesh?.quaternion?.x, y: obj.mesh?.quaternion?.y, z: obj.mesh?.quaternion?.z, w: obj.mesh?.quaternion?.w };
+          let exportedObj = { ...serializableObj };
+
+          if (obj.mesh && THREE) {
+              obj.mesh.updateMatrixWorld(true);
+              const modelRoot = this.getModelRoot();
+              let m = obj.mesh.matrixWorld.clone();
+              
+              // RE-COMPUTE EXACT p1/p2 ENDPOINTS BASED ON MESH TRANSFORM
+              if (obj.type === 'cylinder') {
+                  const dist = obj.baseDistance || 0;
+                  const lp1 = new THREE.Vector3(0, -dist/2, 0);
+                  const lp2 = new THREE.Vector3(0, dist/2, 0);
+                  lp1.applyMatrix4(m);
+                  lp2.applyMatrix4(m);
+                  if (modelRoot) {
+                      const invModel = modelRoot.matrixWorld.clone().invert();
+                      lp1.applyMatrix4(invModel);
+                      lp2.applyMatrix4(invModel);
+                  }
+                  exportedObj.p1 = { x: lp1.x, y: lp1.y, z: lp1.z };
+                  exportedObj.p2 = { x: lp2.x, y: lp2.y, z: lp2.z };
+              } else if (obj.type === 'plane' && obj.p1 && obj.p2 && obj.p3) {
+                  // Find delta transform from original p1,p2,p3 logic
+                  const origCenter = new THREE.Vector3().addVectors(
+                      new THREE.Vector3(obj.p1.x, obj.p1.y, obj.p1.z),
+                      new THREE.Vector3(obj.p2.x, obj.p2.y, obj.p2.z)
+                  ).add(new THREE.Vector3(obj.p3.x, obj.p3.y, obj.p3.z)).divideScalar(3);
+                  
+                  const v1 = new THREE.Vector3().subVectors(new THREE.Vector3(obj.p2.x, obj.p2.y, obj.p2.z), new THREE.Vector3(obj.p1.x, obj.p1.y, obj.p1.z));
+                  const v2 = new THREE.Vector3().subVectors(new THREE.Vector3(obj.p3.x, obj.p3.y, obj.p3.z), new THREE.Vector3(obj.p1.x, obj.p1.y, obj.p1.z));
+                  const normal = new THREE.Vector3().crossVectors(v1, v2).normalize();
+                  const lineDir = new THREE.Vector3().copy(v1).normalize();
+                  const yAxis = new THREE.Vector3().crossVectors(normal, lineDir).normalize();
+                  const basis = new THREE.Matrix4().makeBasis(lineDir, yAxis, normal);
+                  const origQuat = new THREE.Quaternion().setFromRotationMatrix(basis);
+                  
+                  const mOrig = new THREE.Matrix4().compose(origCenter, origQuat, new THREE.Vector3(1,1,1));
+                  const mOrigInv = mOrig.invert();
+                  
+                  // Now calculate new p1, p2, p3
+                  const updateP = (pOrig: any) => {
+                      const pt = new THREE.Vector3(pOrig.x, pOrig.y, pOrig.z);
+                      pt.applyMatrix4(mOrigInv); // to local
+                      pt.applyMatrix4(m); // to new world
+                      if (modelRoot) {
+                         const invModel = modelRoot.matrixWorld.clone().invert();
+                         pt.applyMatrix4(invModel);
+                      }
+                      return { x: pt.x, y: pt.y, z: pt.z };
+                  };
+                  exportedObj.p1 = updateP(obj.p1);
+                  exportedObj.p2 = updateP(obj.p2);
+                  exportedObj.p3 = updateP(obj.p3);
+              } else if (obj.type === 'measurement' && obj.p1 && obj.p2Coord) {
+                  // similar logic might apply, but measurement shouldn't be scaled, just endpoints updated
+                  const origCenter = new THREE.Vector3().addVectors(
+                      new THREE.Vector3(obj.p1.x, obj.p1.y, obj.p1.z),
+                      new THREE.Vector3(obj.p2Coord.x, obj.p2Coord.y, obj.p2Coord.z)
+                  ).multiplyScalar(0.5);
+                  const dir = new THREE.Vector3().subVectors(new THREE.Vector3(obj.p2Coord.x, obj.p2Coord.y, obj.p2Coord.z), new THREE.Vector3(obj.p1.x, obj.p1.y, obj.p1.z)).normalize();
+                  const up = new THREE.Vector3(0,1,0);
+                  const q = new THREE.Quaternion().setFromUnitVectors(up, dir);
+                  const mOrigInv = new THREE.Matrix4().compose(origCenter, q, new THREE.Vector3(1,1,1)).invert();
+                  
+                  const updateP = (pOrig: any) => {
+                      const pt = new THREE.Vector3(pOrig.x, pOrig.y, pOrig.z);
+                      pt.applyMatrix4(mOrigInv).applyMatrix4(m);
+                      if (modelRoot) pt.applyMatrix4(modelRoot.matrixWorld.clone().invert());
+                      return { x: pt.x, y: pt.y, z: pt.z };
+                  };
+                  exportedObj.p1 = updateP(obj.p1);
+                  exportedObj.p2Coord = updateP(obj.p2Coord);
+              } else if (obj.type === 'point' && obj.points && obj.points.length > 0) {
+                  const mOrigInv = new THREE.Matrix4().makeTranslation(-obj.points[0].x, -obj.points[0].y, -obj.points[0].z);
+                  const updateP = (pOrig: any) => {
+                      const pt = new THREE.Vector3(pOrig.x, pOrig.y, pOrig.z);
+                      pt.applyMatrix4(mOrigInv).applyMatrix4(m);
+                      if (modelRoot) pt.applyMatrix4(modelRoot.matrixWorld.clone().invert());
+                      return { x: pt.x, y: pt.y, z: pt.z };
+                  };
+                  exportedObj.points = [updateP(obj.points[0])];
+              } else if (obj.type === 'curve' && obj.points) {
+                  const updateP = (pOrig: any) => {
+                      const pt = new THREE.Vector3(pOrig.x, pOrig.y, pOrig.z);
+                      pt.applyMatrix4(m);
+                      if (modelRoot) pt.applyMatrix4(modelRoot.matrixWorld.clone().invert());
+                      return { x: pt.x, y: pt.y, z: pt.z };
+                  };
+                  exportedObj.points = obj.points.map(updateP);
+              } else if (obj.type === 'angle' && obj.p1 && obj.p2Coord && obj.p3) {
+                  const updateP = (pOrig: any) => {
+                      const pt = new THREE.Vector3(pOrig.x, pOrig.y, pOrig.z);
+                      pt.applyMatrix4(m);
+                      if (modelRoot) pt.applyMatrix4(modelRoot.matrixWorld.clone().invert());
+                      return { x: pt.x, y: pt.y, z: pt.z };
+                  };
+                  exportedObj.p1 = updateP(obj.p1);
+                  exportedObj.p2Coord = updateP(obj.p2Coord);
+                  exportedObj.p3 = updateP(obj.p3);
+              }
+
+              if (modelRoot) {
+                  modelRoot.updateMatrixWorld(true);
+                  const invMain = modelRoot.matrixWorld.clone().invert();
+                  m.premultiply(invMain);
+              }
+              const pos = new THREE.Vector3();
+              const quat = new THREE.Quaternion();
+              const scale = new THREE.Vector3();
+              m.decompose(pos, quat, scale);
+              outPos = { x: pos.x, y: pos.y, z: pos.z };
+              outQuat = { x: quat.x, y: quat.y, z: quat.z, w: quat.w };
+          }
+
           metadataList.push({
               id: obj.id,
               name: obj.name || obj.id,
               type: obj.type,
               color: obj.color,
-              baseDistance: obj.baseDistance,
-              angle: obj.angle,
               groupId: obj.groupId || null,
               groupName: obj.groupId ? (this.planningGroups.find(g => g.id === obj.groupId)?.name || '') : '',
-              ...serializableObj,
+              ...exportedObj,
+              posX: outPos.x,
+              posY: outPos.y,
+              posZ: outPos.z,
+              rotQx: outQuat.x,
+              rotQy: outQuat.y,
+              rotQz: outQuat.z,
+              rotQw: outQuat.w,
               coordinateSystem: {
                   systemType: "Loaded Model Local Coordinate Space",
                   units: "millimeters (mm)",
@@ -2067,14 +2672,27 @@ These files are ready to be aligned directly back into standard engineering and 
           }
           
           // Now recreate objects
+          const modelRoot = this.getModelRoot();
+          const applyModelTransform = (pt: any) => {
+              if (modelRoot && window.THREE) {
+                  const vec = new window.THREE.Vector3(pt.x, pt.y, pt.z);
+                  vec.applyMatrix4(modelRoot.matrixWorld);
+                  return { x: vec.x, y: vec.y, z: vec.z };
+              }
+              return pt;
+          };
+
           for (const obj of objectsToLoad) {
               // Try not to duplicate by name if they somehow match perfectly? Or just duplicate. 
               // Usually we just recreate.
               if (obj.type === 'plane' && obj.p1 && obj.p2 && obj.p3) {
+                  const p1 = applyModelTransform(obj.p1);
+                  const p2 = applyModelTransform(obj.p2);
+                  const p3 = applyModelTransform(obj.p3);
                   this.createPlanningPlane(
-                      new window.THREE.Vector3(obj.p1.x, obj.p1.y, obj.p1.z),
-                      new window.THREE.Vector3(obj.p2.x, obj.p2.y, obj.p2.z),
-                      new window.THREE.Vector3(obj.p3.x, obj.p3.y, obj.p3.z),
+                      new window.THREE.Vector3(p1.x, p1.y, p1.z),
+                      new window.THREE.Vector3(p2.x, p2.y, p2.z),
+                      new window.THREE.Vector3(p3.x, p3.y, p3.z),
                       obj.extWidth,
                       obj.extLength
                   );
@@ -2083,33 +2701,42 @@ These files are ready to be aligned directly back into standard engineering and 
                       this.updatePlaneGeometry(newObj.id, obj.extWidth || 0, obj.thickness || 0);
                   }
               } else if (obj.type === 'cylinder' && obj.p1 && obj.p2) {
+                  const p1 = applyModelTransform(obj.p1);
+                  const p2 = applyModelTransform(obj.p2);
                   this.createPlanningCylinder(
-                      new window.THREE.Vector3(obj.p1.x, obj.p1.y, obj.p1.z),
-                      new window.THREE.Vector3(obj.p2.x, obj.p2.y, obj.p2.z),
+                      new window.THREE.Vector3(p1.x, p1.y, p1.z),
+                      new window.THREE.Vector3(p2.x, p2.y, p2.z),
                       (obj.diameter !== undefined ? obj.diameter : obj.radius * 2) / 2,
                       obj.extension
                   );
               } else if (obj.type === 'curve' && obj.points) {
+                  const pts = obj.points.map((p: any) => applyModelTransform(p));
                   this.createPlanningCurve(
-                      obj.points.map((p: any) => new window.THREE.Vector3(p.x, p.y, p.z)),
+                      pts.map((p: any) => new window.THREE.Vector3(p.x, p.y, p.z)),
                       obj.thickness
                   );
               } else if (obj.type === 'measurement' && obj.p1 && obj.p2Coord) {
+                  const p1 = applyModelTransform(obj.p1);
+                  const p2Coord = applyModelTransform(obj.p2Coord);
                   this.createPlanningMeasurement(
-                      new window.THREE.Vector3(obj.p1.x, obj.p1.y, obj.p1.z),
-                      new window.THREE.Vector3(obj.p2Coord.x, obj.p2Coord.y, obj.p2Coord.z),
+                      new window.THREE.Vector3(p1.x, p1.y, p1.z),
+                      new window.THREE.Vector3(p2Coord.x, p2Coord.y, p2Coord.z),
                       obj.angle || 0
                   );
               } else if (obj.type === 'angle' && obj.p1 && obj.p2Coord && obj.p3) {
+                  const p1 = applyModelTransform(obj.p1);
+                  const p2Coord = applyModelTransform(obj.p2Coord);
+                  const p3 = applyModelTransform(obj.p3);
                   this.createPlanningAngle(
-                      new window.THREE.Vector3(obj.p1.x, obj.p1.y, obj.p1.z),
-                      new window.THREE.Vector3(obj.p2Coord.x, obj.p2Coord.y, obj.p2Coord.z),
-                      new window.THREE.Vector3(obj.p3.x, obj.p3.y, obj.p3.z),
+                      new window.THREE.Vector3(p1.x, p1.y, p1.z),
+                      new window.THREE.Vector3(p2Coord.x, p2Coord.y, p2Coord.z),
+                      new window.THREE.Vector3(p3.x, p3.y, p3.z),
                       obj.angle || 0
                   );
               } else if (obj.type === 'point' && obj.points && obj.points.length > 0) {
+                  const p0 = applyModelTransform(obj.points[0]);
                   this.createPlanningPoint(
-                      new window.THREE.Vector3(obj.points[0].x, obj.points[0].y, obj.points[0].z),
+                      new window.THREE.Vector3(p0.x, p0.y, p0.z),
                       obj.diameter || 0.2
                   );
               } else {
@@ -2378,7 +3005,13 @@ These files are ready to be aligned directly back into standard engineering and 
     const scene = this.viewer?.viewer?.scene || this.viewer?.viewer?.mainScene;
     if (!scene || this.currentMeshes.length === 0) return;
 
-    const boundingBox = new window.THREE.Box3().setFromObject(scene);
+    const boundingBox = new window.THREE.Box3();
+    this.currentMeshes.forEach(mesh => {
+        if (!mesh) return;
+        const meshBox = new window.THREE.Box3().setFromObject(mesh);
+        boundingBox.union(meshBox);
+    });
+    
     const modelCenter = new window.THREE.Vector3();
     if (!boundingBox.isEmpty()) {
         if (typeof boundingBox.getCenter === 'function' && boundingBox.getCenter.length === 0) {
@@ -2430,6 +3063,7 @@ These files are ready to be aligned directly back into standard engineering and 
               const moveDist = val * mesh.userData.maxDim * 0.5;
               mesh.position.copy(mesh.userData.originalPosition)
                   .add(mesh.userData.explosionDir.clone().multiplyScalar(moveDist));
+              mesh.updateMatrixWorld(true);
           }
       });
       try { this.viewer.viewer.Render(); } catch(err) {}

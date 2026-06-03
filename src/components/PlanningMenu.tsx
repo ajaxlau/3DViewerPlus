@@ -315,7 +315,9 @@ export function PlanningMenu() {
 
         <div className="border-t border-slate-200 dark:border-slate-800 pt-4 mt-2">
             <div className="flex flex-col gap-2 mb-3">
-                <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Created Objects</h4>
+                <div className="flex items-center justify-between">
+                    <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Project IO</h4>
+                </div>
                 <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-900/40 border border-slate-200 dark:border-slate-800 rounded p-1.5 px-3">
                     {/* Open Button */}
                     <button 
@@ -410,6 +412,10 @@ export function PlanningMenu() {
                 </button>
             </div>
             
+            <div className="flex items-center justify-between mb-3 mt-4">
+                <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Object List</h4>
+            </div>
+
             {planningObjects.length === 0 && (
                 <div className="text-center text-xs text-slate-500 py-4 opacity-70">
                     No objects created yet.
@@ -457,18 +463,18 @@ export function PlanningMenu() {
                                     
                                     <div className="flex items-center gap-0.5 shrink-0">
                                         <button 
-                                            onClick={() => viewerManager?.exportPlanningGroupZip(group.id)} 
-                                            className="p-1 text-slate-400 hover:text-emerald-500 dark:text-slate-500 dark:hover:text-emerald-400 transition"
-                                            title="Save Planning"
-                                        >
-                                            <Save size={13} />
-                                        </button>
-                                        <button 
                                             onClick={() => viewerManager?.setPlanningGroupVisibility(group.id, group.visible === false)} 
                                             className="p-1 text-slate-400 hover:text-blue-500 dark:text-slate-500 dark:hover:text-blue-400 transition"
                                             title={group.visible === false ? "Show Group" : "Hide Group"}
                                         >
                                             {group.visible === false ? <EyeOff size={13} /> : <Eye size={13} />}
+                                        </button>
+                                        <button 
+                                            onClick={() => viewerManager?.duplicatePlanningGroup(group.id)} 
+                                            className="p-1 text-slate-400 hover:text-indigo-500 dark:text-slate-500 dark:hover:text-indigo-400 transition"
+                                            title="Duplicate Group"
+                                        >
+                                            <Copy size={13} />
                                         </button>
                                         {confirmDeleteGroupId === group.id ? (
                                             <div className="flex items-center gap-1 shrink-0 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 px-1 py-0.5 rounded text-[9px]">
@@ -602,6 +608,52 @@ function PlanningObjectItem({ obj, viewerManager }: { obj: any, viewerManager: a
   const [curveDiameter, setCurveDiameter] = useState(obj.thickness !== undefined ? obj.thickness : 0.2);
   const [pointDiameter, setPointDiameter] = useState(obj.diameter !== undefined ? obj.diameter : 0.2);
 
+  const [localPos, setLocalPos] = useState({ x: obj.posX, y: obj.posY, z: obj.posZ });
+
+  // Sync with prop when obj ref changes unexpectedly
+  useEffect(() => {
+     setLocalPos({ x: obj.posX, y: obj.posY, z: obj.posZ });
+  }, [obj.posX, obj.posY, obj.posZ]);
+
+  // Hook into viewerManager to listen for transform changes directly
+  useEffect(() => {
+    if (!viewerManager || !viewerManager.transformControl) return;
+    
+    const handleTransformChange = () => {
+       if (viewerManager.transformControl.object === obj.mesh) {
+           const mesh = obj.mesh;
+           
+           let outPos = { x: mesh.position.x, y: mesh.position.y, z: mesh.position.z };
+           const THREE = (window as any).THREE;
+           if (THREE) {
+               const modelRoot = viewerManager.getModelRoot();
+               let m = mesh.matrixWorld.clone();
+               if (modelRoot) {
+                   modelRoot.updateMatrixWorld(true);
+                   const invMain = modelRoot.matrixWorld.clone().invert();
+                   m.premultiply(invMain);
+               }
+               const pos = new THREE.Vector3();
+               const quat = new THREE.Quaternion();
+               const scale = new THREE.Vector3();
+               m.decompose(pos, quat, scale);
+               outPos = { x: pos.x, y: pos.y, z: pos.z };
+           }
+           
+           setLocalPos({
+              x: outPos.x,
+              y: outPos.y,
+              z: outPos.z
+           });
+       }
+    };
+
+    viewerManager.transformControl.addEventListener('change', handleTransformChange);
+    return () => {
+       viewerManager.transformControl.removeEventListener('change', handleTransformChange);
+    };
+  }, [viewerManager, obj.mesh]);
+
   useEffect(() => {
     if (!open) return;
     const handleClickOutside = (e: MouseEvent | TouchEvent) => {
@@ -691,11 +743,13 @@ function PlanningObjectItem({ obj, viewerManager }: { obj: any, viewerManager: a
                   {obj.type === 'cylinder' && obj.radius !== undefined && (
                       <span className="text-[11px] font-mono leading-tight whitespace-nowrap tracking-tight">
                           Dia: {(obj.radius * 2).toFixed(1)} mm | Len: {obj.length.toFixed(1)} mm
+                          {localPos.x !== undefined && <span className="ml-2 text-[9px] text-slate-400 dark:text-slate-500">Pos: {localPos.x.toFixed(1)}, {localPos.y?.toFixed(1)}, {localPos.z?.toFixed(1)}</span>}
                       </span>
                   )}
                   {obj.type === 'plane' && obj.width !== undefined && (
                       <span className="text-[11px] font-mono leading-tight whitespace-nowrap tracking-tight">
                           Size: {obj.width.toFixed(1)} × {obj.height.toFixed(1)} mm | Thk: {obj.thickness.toFixed(1)} mm
+                          {localPos.x !== undefined && <span className="ml-2 text-[9px] text-slate-400 dark:text-slate-500">Pos: {localPos.x.toFixed(1)}, {localPos.y?.toFixed(1)}, {localPos.z?.toFixed(1)}</span>}
                       </span>
                   )}
                   {obj.type === 'curve' && obj.thickness !== undefined && (
@@ -716,6 +770,7 @@ function PlanningObjectItem({ obj, viewerManager }: { obj: any, viewerManager: a
                   {obj.type === 'point' && obj.diameter !== undefined && (
                       <span className="text-[11px] font-mono leading-tight whitespace-nowrap tracking-tight text-purple-600 dark:text-purple-400 font-bold">
                           D: {pointDiameter.toFixed(1)} mm
+                          {localPos.x !== undefined && <span className="ml-2 text-[9px] text-slate-400 dark:text-slate-500 font-normal">Pos: {localPos.x.toFixed(1)}, {localPos.y?.toFixed(1)}, {localPos.z?.toFixed(1)}</span>}
                       </span>
                   )}
                   </div>
