@@ -28,6 +28,7 @@ export class ViewerManager {
   highlightedMesh: any = null;
   treeParseInterval: any = null;
   transformControl: any = null;
+  onTransformBlockNav: any = null;
 
   // Planning Tools state
   planningMode: 'none' | 'plane' | 'cylinder' | 'measure' | 'curve' | 'angle' | 'point' = 'none';
@@ -219,14 +220,17 @@ export class ViewerManager {
     scene.add(this.transformControl);
 
     // Block online3dviewer navigation if hovering over transform gizmo
-    const blockNav = (e: Event) => {
-        if (this.transformControl && this.transformControl.axis !== null) {
-            e.stopPropagation();
-        }
-    };
+    if (!this.onTransformBlockNav) {
+        this.onTransformBlockNav = (e: Event) => {
+            if (this.transformControl && this.transformControl.axis !== null) {
+                e.stopPropagation();
+            }
+        };
+    }
+    
     if (v.renderer?.domElement) {
-        v.renderer.domElement.addEventListener('mousedown', blockNav, true);
-        v.renderer.domElement.addEventListener('touchstart', blockNav, true);
+        v.renderer.domElement.addEventListener('mousedown', this.onTransformBlockNav, true);
+        v.renderer.domElement.addEventListener('touchstart', this.onTransformBlockNav, true);
     }
     
     const broadcastTransformChange = () => {
@@ -333,11 +337,11 @@ export class ViewerManager {
     // 5. Clean up pointer events targeting container element
     if (this.container) {
       if (this.onPointerDown) {
-        this.container.removeEventListener('pointerdown', this.onPointerDown);
+        this.container.removeEventListener('pointerdown', this.onPointerDown, { capture: true } as EventListenerOptions);
         this.onPointerDown = null;
       }
       if (this.onPointerUp) {
-        this.container.removeEventListener('pointerup', this.onPointerUp);
+        this.container.removeEventListener('pointerup', this.onPointerUp, { capture: true } as EventListenerOptions);
         this.onPointerUp = null;
       }
     }
@@ -347,6 +351,26 @@ export class ViewerManager {
       this.clearAllPlanningObjects();
     } catch (e) {
       console.warn("Disposal failed on custom planning items", e);
+    }
+    
+    // 6.5 Dispose TransformControls properly
+    if (this.transformControl) {
+        if (this.viewer && this.viewer.viewer) {
+            const v = this.viewer.viewer;
+            const scene = v.scene || v.mainScene;
+            if (scene) {
+                scene.remove(this.transformControl);
+            }
+            if (v.renderer && v.renderer.domElement && this.onTransformBlockNav) {
+                v.renderer.domElement.removeEventListener('mousedown', this.onTransformBlockNav, true);
+                v.renderer.domElement.removeEventListener('touchstart', this.onTransformBlockNav, true);
+            }
+        }
+        if (typeof this.transformControl.dispose === 'function') {
+            try { this.transformControl.dispose(); } catch(e) {}
+        }
+        this.transformControl = null;
+        this.onTransformBlockNav = null;
     }
 
     // 7. Clear general WebGL context and references in embedded viewer
