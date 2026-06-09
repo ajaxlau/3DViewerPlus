@@ -330,7 +330,7 @@ export function PlanningMenu() {
                     </button>
                     <input 
                         type="file" 
-                        accept=".zip"
+                        accept=".zip,.json,.mrk.json"
                         ref={fileInputRef}
                         className="hidden"
                         onChange={(e) => {

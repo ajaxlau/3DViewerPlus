@@ -15,11 +15,14 @@ export function ViewerCanvas() {
     const input = document.createElement('input');
     input.type = 'file';
     input.multiple = true;
+    input.style.display = 'none';
+    document.body.appendChild(input);
     input.onchange = (e) => {
       const files = (e.target as HTMLInputElement).files;
-      if (files && files.length > 0 && window._viewerManagerInstance) {
-        window._viewerManagerInstance.loadFiles(files);
+      if (files && files.length > 0 && viewerManager) {
+        viewerManager.loadFiles(files);
       }
+      setTimeout(() => document.body.removeChild(input), 100);
     };
     input.click();
   };
@@ -43,7 +46,7 @@ export function ViewerCanvas() {
       e.preventDefault(); e.stopPropagation(); 
       setIsDragging(false); 
       if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
-        if (window._viewerManagerInstance) window._viewerManagerInstance.loadFiles(e.dataTransfer.files);
+        if (viewerManager) viewerManager.loadFiles(e.dataTransfer.files);
       }
     };
 
@@ -58,7 +61,7 @@ export function ViewerCanvas() {
       document.body.removeEventListener('dragleave', handleDragLeave);
       document.body.removeEventListener('drop', handleDrop);
     };
-  }, []);
+  }, [viewerManager]);
 
   const handleQuickSnapshotShare = async () => {
     if (!viewerManager) return;
