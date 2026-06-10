@@ -664,47 +664,6 @@ export class ViewerManager {
           if (stableCount >= 2 || attempts >= 120) {
             clearInterval(this.treeParseInterval);
 
-            // Revert previously added modelRotation to ensure points are stored completely unaffected
-            // Instead, we will configure the camera to view the model from LPS orientation (Z up, -Y looking in)
-            if (this.viewer && this.viewer.viewer) {
-               // Calculate optimal distance from bounding sphere
-               let radius = 100;
-               let center = new window.THREE.Vector3(0,0,0);
-               try {
-                   if (!this.modelBBox) this.modelBBox = new window.THREE.Box3();
-                   this.modelBBox.makeEmpty();
-                   if (scene) {
-                       scene.traverse((c: any) => {
-                           if (c.isMesh && c.type !== "LineSegments" && c.type !== "EdgesGeometry" && !this.isCustomOverlay(c)) {
-                               this.modelBBox.expandByObject(c);
-                           }
-                       });
-                   }
-                   if (!this.modelBBox.isEmpty()) {
-                       this.modelBBox.getCenter(center);
-                       radius = this.modelBBox.getBoundingSphere(new window.THREE.Sphere(center)).radius;
-                   }
-               } catch(err) {}
-
-               const fov = 45.0;
-               const fovRad = (fov / 2.0) * (Math.PI / 180.0);
-               const distance = radius / Math.sin(fovRad);
-
-               // For LPS Space: Anterior is -Y. Superior is +Z. Left is +X.
-               // We view from front (-Y) towards Posterior (+Y). Up is Z.
-               const eye = new window.OV.Coord3D(center.x, center.y - distance, center.z);
-               const tgt = new window.OV.Coord3D(center.x, center.y, center.z);
-               const upVec = new window.OV.Coord3D(0, 0, 1);
-
-               const newCam = new window.OV.Camera(eye, tgt, upVec, fov);
-               if (this.viewer.viewer.navigation) {
-                   if (typeof this.viewer.viewer.SetUpVector === 'function') {
-                       this.viewer.viewer.SetUpVector(3, false); // 3 = Direction.Z
-                   }
-                   this.viewer.viewer.navigation.SetCamera(newCam);
-               }
-            }
-
             this.buildModelTree();
             this.setupExplosion();
             

@@ -55,9 +55,11 @@ function MainLayout() {
           catch (e) { console.warn("Could not decode query parameter", e); }
       }
 
+      let timer3: any;
       if (modelUrl) {
-          setTimeout(() => { viewerManager.loadUrl(modelUrl, pendingCamera); }, 100);
+          timer3 = setTimeout(() => { viewerManager.loadUrl(modelUrl, pendingCamera); }, 100);
       }
+      return () => { if (timer3) clearTimeout(timer3); };
     }
   }, [viewerManager]);
 
