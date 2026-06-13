@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { useViewer } from '../context/ViewerContext';
-import { BoxSelect, Camera, Move, RotateCw, Scaling } from 'lucide-react';
+import { BoxSelect, Camera, Move, RotateCw, Scaling, Info } from 'lucide-react';
 
 export function ViewerCanvas() {
   const { 
@@ -10,6 +10,28 @@ export function ViewerCanvas() {
     isTransformActive, transformMode, activeTransformObjectId, planningObjects
   } = useViewer();
   const [isDragging, setIsDragging] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
+  const infoRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (infoRef.current && !infoRef.current.contains(event.target as Node)) {
+        setShowInfo(false);
+      }
+    }
+    function handleWindowBlur() {
+        setShowInfo(false);
+    }
+    
+    if (showInfo) {
+      document.addEventListener('mousedown', handleClickOutside);
+      window.addEventListener('blur', handleWindowBlur);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      window.removeEventListener('blur', handleWindowBlur);
+    };
+  }, [showInfo]);
   
   const handleOpenFiles = () => {
     const input = document.createElement('input');
@@ -127,13 +149,55 @@ export function ViewerCanvas() {
 
       {/* Floating Action Buttons */}
       {!isEmpty && (
-        <button
-          onClick={handleQuickSnapshotShare}
-          className="absolute bottom-6 right-6 z-20 w-12 h-12 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 hover:from-blue-500 hover:to-indigo-400 text-white flex items-center justify-center shadow-[0_4px_14px_0_rgba(59,130,246,0.39)] transition-all hover:shadow-[0_6px_20px_rgba(59,130,246,0.23)] hover:-translate-y-0.5 active:translate-y-0 active:scale-95 group focus:outline-none"
-          title="Share Snapshot"
-        >
-          <Camera size={20} className="transition-transform group-hover:scale-110" />
-        </button>
+        <>
+          <div ref={infoRef}>
+            <button
+              onClick={() => setShowInfo(!showInfo)}
+              className="absolute bottom-6 left-8 z-20 w-12 h-12 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 hover:from-blue-500 hover:to-indigo-400 text-white flex items-center justify-center shadow-[0_4px_14px_0_rgba(59,130,246,0.39)] transition-all hover:shadow-[0_6px_20px_rgba(59,130,246,0.23)] hover:-translate-y-0.5 active:translate-y-0 active:scale-95 group focus:outline-none"
+              title="Shortcuts Info"
+            >
+              <Info size={20} className="transition-transform group-hover:scale-110" />
+            </button>
+            
+            {showInfo && (
+              <div className="absolute bottom-20 left-8 z-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md rounded-xl p-5 border border-slate-200/50 dark:border-slate-700/50 shadow-xl w-80 pointer-events-auto">
+              <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-3 uppercase tracking-wider">Controls & Shortcuts</h3>
+              <ul className="text-xs text-slate-600 dark:text-slate-400 space-y-3">
+                <li className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2">
+                  <span>Reset Camera</span>
+                  <kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-800 rounded font-mono text-[10px] shadow-sm font-bold text-slate-700 dark:text-slate-300">R</kbd>
+                </li>
+                <li className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2">
+                  <span>Rotate</span>
+                  <kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-800 rounded font-mono text-[10px] shadow-sm font-bold text-slate-700 dark:text-slate-300">Left Click & Drag</kbd>
+                </li>
+                <li className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2">
+                  <span>Pan</span>
+                  <kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-800 rounded font-mono text-[10px] shadow-sm font-bold text-slate-700 dark:text-slate-300">Middle Click & Drag</kbd>
+                </li>
+                <li className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2">
+                  <span>Zoom In / Out</span>
+                  <div className="flex gap-1">
+                      <kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-800 rounded font-mono text-[10px] shadow-sm font-bold text-slate-700 dark:text-slate-300">Scroll</kbd>
+                  </div>
+                </li>
+		<li className="flex justify-between items-center pt-1">
+			<span>Smooth Zoom</span>
+			<kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-800 rounded font-mono text-[10px] shadow-sm font-bold text-slate-700 dark:text-slate-300">Ctrl + Left Click & Drag</kbd>
+		</li>
+              </ul>
+            </div>
+          )}
+          </div>
+
+          <button
+            onClick={handleQuickSnapshotShare}
+            className="absolute bottom-6 right-6 z-20 w-12 h-12 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 hover:from-blue-500 hover:to-indigo-400 text-white flex items-center justify-center shadow-[0_4px_14px_0_rgba(59,130,246,0.39)] transition-all hover:shadow-[0_6px_20px_rgba(59,130,246,0.23)] hover:-translate-y-0.5 active:translate-y-0 active:scale-95 group focus:outline-none"
+            title="Share Snapshot"
+          >
+            <Camera size={20} className="transition-transform group-hover:scale-110" />
+          </button>
+        </>
       )}
 
       {/* Active Object overlay settings */}
@@ -226,7 +290,7 @@ function ActiveObjectOverlaySettings({ obj, viewerManager }: { obj: any, viewerM
     const hasTools = obj.type === 'plane' || obj.type === 'cylinder';
 
     return (
-        <div className={`absolute ${hasTools ? 'top-16' : 'top-4'} right-4 z-20 flex flex-col bg-white/90 dark:bg-slate-800/90 backdrop-blur shadow-md rounded-md p-3 border border-slate-200 dark:border-slate-700 w-48 pointer-events-auto`}>
+        <div className={`absolute top-8 left-8 z-20 flex flex-col bg-white/90 dark:bg-slate-800/90 backdrop-blur shadow-md rounded-md p-3 border border-slate-200 dark:border-slate-700 w-48 pointer-events-auto`}>
             {obj.type === 'plane' && (
                 <div className="flex flex-col gap-2">
                     <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">{obj.name || "Plane"} Geometry</div>
