@@ -129,7 +129,7 @@ export function ViewerCanvas() {
       
       {/* Transform Floating Buttons */}
       {isTransformActive && activeTransformObjectId && ['plane', 'cylinder'].includes(planningObjects.find(o => o.id === activeTransformObjectId)?.type) && (
-        <div className="absolute top-4 right-4 z-20 flex bg-white/90 dark:bg-slate-800/90 backdrop-blur shadow-md rounded-md p-1 border border-slate-200 dark:border-slate-700">
+        <div className="absolute top-6 right-6 z-20 flex bg-white/90 dark:bg-slate-800/90 backdrop-blur shadow-md rounded-md p-1 border border-slate-200 dark:border-slate-700">
             <button
               onClick={() => viewerManager?.setTransformMode('translate')}
               className={`p-2 rounded ${transformMode === 'translate' ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50'} transition-colors`}
@@ -153,14 +153,14 @@ export function ViewerCanvas() {
           <div ref={infoRef}>
             <button
               onClick={() => setShowInfo(!showInfo)}
-              className="absolute bottom-6 left-8 z-20 w-12 h-12 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 hover:from-blue-500 hover:to-indigo-400 text-white flex items-center justify-center shadow-[0_4px_14px_0_rgba(59,130,246,0.39)] transition-all hover:shadow-[0_6px_20px_rgba(59,130,246,0.23)] hover:-translate-y-0.5 active:translate-y-0 active:scale-95 group focus:outline-none"
+              className="absolute bottom-6 left-6 z-20 w-12 h-12 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 hover:from-blue-500 hover:to-indigo-400 text-white flex items-center justify-center shadow-[0_4px_14px_0_rgba(59,130,246,0.39)] transition-all hover:shadow-[0_6px_20px_rgba(59,130,246,0.23)] hover:-translate-y-0.5 active:translate-y-0 active:scale-95 group focus:outline-none"
               title="Shortcuts Info"
             >
               <Info size={20} className="transition-transform group-hover:scale-110" />
             </button>
             
             {showInfo && (
-              <div className="absolute bottom-20 left-8 z-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md rounded-xl p-5 border border-slate-200/50 dark:border-slate-700/50 shadow-xl w-80 pointer-events-auto">
+              <div className="absolute bottom-20 left-6 z-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md rounded-xl p-5 border border-slate-200/50 dark:border-slate-700/50 shadow-xl w-80 pointer-events-auto">
               <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-3 uppercase tracking-wider">Controls & Shortcuts</h3>
               <ul className="text-xs text-slate-600 dark:text-slate-400 space-y-3">
                 <li className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2">
@@ -290,7 +290,7 @@ function ActiveObjectOverlaySettings({ obj, viewerManager }: { obj: any, viewerM
     const hasTools = obj.type === 'plane' || obj.type === 'cylinder';
 
     return (
-        <div className={`absolute top-8 left-8 z-20 flex flex-col bg-white/90 dark:bg-slate-800/90 backdrop-blur shadow-md rounded-md p-3 border border-slate-200 dark:border-slate-700 w-48 pointer-events-auto`}>
+        <div className={`absolute top-6 left-6 z-20 flex flex-col bg-white/90 dark:bg-slate-800/90 backdrop-blur shadow-md rounded-md p-3 border border-slate-200 dark:border-slate-700 w-48 pointer-events-auto`}>
             {obj.type === 'plane' && (
                 <div className="flex flex-col gap-2">
                     <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">{obj.name || "Plane"} Geometry</div>
