@@ -63,6 +63,30 @@ function MainLayout() {
     }
   }, [viewerManager]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't trigger if user is typing in an input or textarea
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      
+      if (viewerManager) {
+        if (e.key.toLowerCase() === 'r') {
+          viewerManager.resetCamera();
+        }
+      }
+      
+      if (e.key.toLowerCase() === 'f') {
+        if (!document.fullscreenElement) {
+          document.documentElement.requestFullscreen().catch(() => {});
+        } else {
+          document.exitFullscreen().catch(() => {});
+        }
+      }
+    };
+    
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [viewerManager]);
+
   return (
     <div className="flex flex-col h-dvh w-dvw overflow-hidden bg-slate-100 dark:bg-slate-950 sm:p-4 text-slate-900 dark:text-slate-200 transition-colors">
       <div className="flex flex-col flex-1 overflow-hidden sm:border sm:border-slate-300 dark:sm:border-slate-700 bg-white dark:bg-slate-900 shadow-sm rounded-sm">
@@ -74,7 +98,13 @@ function MainLayout() {
           }, 300);
         }} />
         <div className="flex flex-1 min-h-0 relative flex-col md:flex-row">
-          <Sidebar collapsed={sidebarCollapsed} />
+          <Sidebar collapsed={sidebarCollapsed} onClose={() => {
+            setSidebarCollapsed(true);
+            setTimeout(() => {
+              if (viewerManager && viewerManager.viewer) viewerManager.viewer.Resize();
+              if (viewerManager && viewerManager.rulersVisible) viewerManager.resizeRulers();
+            }, 300);
+          }} />
           <ViewerCanvas />
           <PlanningMenu />
         </div>

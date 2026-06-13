@@ -60,6 +60,7 @@ interface ViewerContextState {
 
   isTransformActive: boolean;
   transformMode: 'translate' | 'rotate' | 'scale';
+  activeTransformObjectId: string | null;
 
   setContainerRef: (ref: HTMLElement | null) => void;
   setRulerRefs: (topRef?: HTMLCanvasElement | null, leftRef?: HTMLCanvasElement | null) => void;
@@ -102,6 +103,7 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
 
   const [isTransformActive, setIsTransformActive] = useState(false);
   const [transformMode, setTransformMode] = useState<'translate' | 'rotate' | 'scale'>('translate');
+  const [activeTransformObjectId, setActiveTransformObjectId] = useState<string | null>(null);
 
   const setPlanningMode = (mode: 'none' | 'plane' | 'cylinder' | 'measure' | 'curve' | 'angle' | 'point') => {
     setPlanningModeState(mode);
@@ -162,7 +164,10 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
         onPlanningGroupsChange: (groups) => setPlanningGroups([...groups]),
         onPlanningPointsChange: (count) => setPlanningPointsPicked(count),
         onMeasurementChange: (m) => setMeasurement(m),
-        onTransformActiveChange: (active) => setIsTransformActive(active),
+        onTransformActiveChange: (active, objId) => {
+           setIsTransformActive(active);
+           setActiveTransformObjectId(active ? (objId || null) : null);
+        },
         onTransformModeChange: (mode) => setTransformMode(mode as any)
       });
       const isDark = document.documentElement.classList.contains('dark') || 
@@ -259,7 +264,7 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
       planningGroups, setPlanningGroups,
       measurement,
       backgroundImage, setBackgroundImage, backgroundOpacity, setBackgroundOpacity,
-      isTransformActive, transformMode,
+      isTransformActive, transformMode, activeTransformObjectId,
       setContainerRef, setRulerRefs
     }}>
       {children}

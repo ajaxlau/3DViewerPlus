@@ -7,7 +7,7 @@ export function ViewerCanvas() {
     setContainerRef, setRulerRefs, isEmpty, rulersVisible, 
     viewerManager, filename, setActiveModal,
     backgroundImage, backgroundOpacity,
-    isTransformActive, transformMode
+    isTransformActive, transformMode, activeTransformObjectId, planningObjects
   } = useViewer();
   const [isDragging, setIsDragging] = useState(false);
   
@@ -106,7 +106,7 @@ export function ViewerCanvas() {
       />
       
       {/* Transform Floating Buttons */}
-      {isTransformActive && (
+      {isTransformActive && activeTransformObjectId && ['plane', 'cylinder'].includes(planningObjects.find(o => o.id === activeTransformObjectId)?.type) && (
         <div className="absolute top-4 right-4 z-20 flex bg-white/90 dark:bg-slate-800/90 backdrop-blur shadow-md rounded-md p-1 border border-slate-200 dark:border-slate-700">
             <button
               onClick={() => viewerManager?.setTransformMode('translate')}
@@ -134,6 +134,14 @@ export function ViewerCanvas() {
         >
           <Camera size={20} className="transition-transform group-hover:scale-110" />
         </button>
+      )}
+
+      {/* Active Object overlay settings */}
+      {isTransformActive && activeTransformObjectId && (
+          <ActiveObjectOverlaySettings 
+             obj={planningObjects.find(o => o.id === activeTransformObjectId)}
+             viewerManager={viewerManager}
+          />
       )}
       
       {/* Rulers Overlay Layer */}
@@ -168,4 +176,126 @@ export function ViewerCanvas() {
       )}
     </main>
   );
+}
+
+function ScaleSliderRow({ label, value, min, max, step, onChange, isMm = false }: { label: string, value: number, min: number, max: number, step: number, onChange: (v: number) => void, isMm?: boolean }) {
+    return (
+        <div className="flex flex-col gap-1 my-1 pointer-events-auto">
+            <div className="flex justify-between items-center text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                <span>{label}</span>
+                <span className="font-mono text-blue-600 dark:text-blue-400">
+                    {isMm ? `${value?.toFixed(1) || '0.0'} mm` : `${((value || 0) * 100).toFixed(0)}%`}
+                </span>
+            </div>
+            <input 
+                type="range" 
+                min={min} max={max} step={step}
+                value={value || 0} 
+                onChange={e => onChange(parseFloat(e.target.value))}
+                className="w-full h-1 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500 dark:accent-blue-400 focus:outline-none"
+            />
+        </div>
+    );
+}
+
+function ActiveObjectOverlaySettings({ obj, viewerManager }: { obj: any, viewerManager: any }) {
+    if (!obj || !viewerManager) return null;
+
+    const handlePlaneChange = (extSize?: number, thk?: number) => {
+        const nextExt = extSize !== undefined ? extSize : (obj.extWidth || 0);
+        const nextThk = thk !== undefined ? thk : (obj.thickness || 0);
+        viewerManager.updatePlaneGeometry(obj.id, nextExt, nextThk);
+    };
+  
+    const handleCylinderChange = (dia?: number, ext?: number) => {
+        const nextDia = dia !== undefined ? dia : ((obj.diameter !== undefined ? obj.diameter : obj.radius * 2) || 1.0);
+        const nextExt = ext !== undefined ? ext : (obj.extension || 20);
+        viewerManager.updateCylinderGeometry(obj.id, nextDia, nextExt);
+    };
+  
+    const updateCurveDiameter = (val: number) => {
+        viewerManager.updatePlanningObjectCurveThickness(obj.id, val);
+    };
+  
+    const updatePointDiameter = (val: number) => {
+        if (typeof viewerManager.updatePlanningPointDiameter === 'function') {
+            viewerManager.updatePlanningPointDiameter(obj.id, val);
+        }
+    };
+
+    const hasTools = obj.type === 'plane' || obj.type === 'cylinder';
+
+    return (
+        <div className={`absolute ${hasTools ? 'top-16' : 'top-4'} right-4 z-20 flex flex-col bg-white/90 dark:bg-slate-800/90 backdrop-blur shadow-md rounded-md p-3 border border-slate-200 dark:border-slate-700 w-48 pointer-events-auto`}>
+            {obj.type === 'plane' && (
+                <div className="flex flex-col gap-2">
+                    <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">{obj.name || "Plane"} Geometry</div>
+                    <ScaleSliderRow 
+                        label="Extension" 
+                        value={obj.extWidth !== undefined ? obj.extWidth : 10} 
+                        min={0} max={100} step={5}
+                        onChange={v => handlePlaneChange(v, undefined)} 
+                        isMm={true}
+                    />
+                    <ScaleSliderRow 
+                        label="Thickness" 
+                        value={obj.thickness || 0.0} 
+                        min={-1.0} max={1.0} step={0.1}
+                        onChange={v => handlePlaneChange(undefined, v)} 
+                        isMm={true}
+                    />
+                </div>
+            )}
+            
+            {obj.type === 'cylinder' && (
+                <div className="flex flex-col gap-2">
+                    <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">{obj.name || "Cylinder"} Geometry</div>
+                    <ScaleSliderRow 
+                        label="Diameter" 
+                        value={obj.diameter !== undefined ? obj.diameter : (obj.radius ? obj.radius * 2 : 1.0)} 
+                        min={0.1} max={10.0} step={0.1}
+                        onChange={v => handleCylinderChange(v, undefined)} 
+                        isMm={true}
+                    />
+                    <ScaleSliderRow 
+                        label="Extension" 
+                        value={obj.extension !== undefined ? obj.extension : 20} 
+                        min={0} max={100} step={5}
+                        onChange={v => handleCylinderChange(undefined, v)} 
+                        isMm={true}
+                    />
+                </div>
+            )}
+
+            {obj.type === 'curve' && (
+                <div className="flex flex-col gap-2">
+                    <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">{obj.name || "Curve"} Geometry</div>
+                    <ScaleSliderRow 
+                        label="Diameter" 
+                        value={obj.thickness || 0.2} 
+                        min={0.1} max={2.0} step={0.1}
+                        onChange={updateCurveDiameter} 
+                        isMm={true}
+                    />
+                </div>
+            )}
+
+            {obj.type === 'point' && (
+                <div className="flex flex-col gap-2">
+                    <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">{obj.name || "Point"}</div>
+                    <ScaleSliderRow 
+                        label="Diameter" 
+                        value={obj.diameter || 0.2} 
+                        min={0.05} max={2.0} step={0.05}
+                        onChange={updatePointDiameter} 
+                        isMm={true}
+                    />
+                </div>
+            )}
+            
+            {['measurement', 'angle'].includes(obj.type) && (
+                <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">{obj.name || obj.type}</div>
+            )}
+        </div>
+    );
 }

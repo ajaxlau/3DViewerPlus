@@ -13,7 +13,7 @@ export interface ViewerManagerConfig {
   onPlanningPointsChange?: (count: number) => void;
   onMeasurementChange?: (measurement: { distance: number, angle: number } | null) => void;
   onPlanningGroupsChange?: (groups: any[]) => void;
-  onTransformActiveChange?: (active: boolean) => void;
+  onTransformActiveChange?: (active: boolean, objId?: string) => void;
   onTransformModeChange?: (mode: string) => void;
 }
 
@@ -162,12 +162,15 @@ export class ViewerManager {
         this.viewer.viewer.navigation.SetNavigationMode(freeOrbitMode);
       } else {
         this.viewer.viewer.navigation.fixUpVector = false;
-        this.viewer.viewer.navigation.navigationMode = 2;
+        this.viewer.viewer.navigation.navigationMode = 2; // Assuming FreeOrbit is 2
       }
       
-      const cam = this.viewer.viewer.navigation.camera;
-      if (cam && cam.up && typeof this.viewer.viewer.SetUpVector === 'function') {
-        this.viewer.viewer.SetUpVector(cam.up, false);
+      // We should ensure fixUpVector is turned off for continuous orbit rotation.
+      this.viewer.viewer.navigation.fixUpVector = false;
+      
+      // Force Z up vector without fixing it so the user can orbit freely continuously
+      if (typeof this.viewer.viewer.SetUpVector === 'function') {
+         this.viewer.viewer.SetUpVector(3, false); // 3 = Direction.Z
       }
     } catch (error) {}
     if (this.viewer.viewer.scene) {
@@ -304,6 +307,24 @@ export class ViewerManager {
       this.viewer.FitToWindow();
     } else if (this.viewer && this.viewer.viewer && typeof this.viewer.viewer.FitToWindow === 'function') {
       this.viewer.viewer.FitToWindow();
+    }
+  }
+
+  resetCamera() {
+    if (this.viewer && this.viewer.viewer && this.viewer.viewer.navigation && this.defaultCamera) {
+      this.viewer.viewer.navigation.SetCamera(
+          new window.OV.Camera(
+              new window.OV.Coord3D(this.defaultCamera.eye.x, this.defaultCamera.eye.y, this.defaultCamera.eye.z),
+              new window.OV.Coord3D(this.defaultCamera.center.x, this.defaultCamera.center.y, this.defaultCamera.center.z),
+              new window.OV.Coord3D(this.defaultCamera.up.x, this.defaultCamera.up.y, this.defaultCamera.up.z),
+              this.defaultCamera.fov || 45.0
+          )
+      );
+      if (this.viewer.viewer.scene) {
+        try { this.viewer.viewer.Render(); } catch(e) {}
+      }
+    } else {
+      this.fitToWindow();
     }
   }
 
@@ -829,7 +850,7 @@ export class ViewerManager {
             raycaster.setFromCamera(mouse, this.viewer.viewer.camera);
             
             const planningMeshes = this.planningMode === 'none' 
-                ? this.planningObjects.filter(o => o.type === 'plane' || o.type === 'cylinder').map(o => o.mesh).filter(Boolean)
+                ? this.planningObjects.filter(o => o.type === 'plane' || o.type === 'cylinder' || o.type === 'curve' || o.type === 'point').map(o => o.mesh).filter(Boolean)
                 : [];
                 
             let scene = this.viewer.viewer.scene || this.viewer.viewer.mainScene;
@@ -910,9 +931,20 @@ export class ViewerManager {
 
                 if (hitPlanningMesh) {
                     this.highlightMesh(null);
+                    
+                    const hitObj = this.planningObjects.find(o => o.mesh === hitPlanningMesh);
+                    const hitObjId = hitObj ? hitObj.id : undefined;
+                    
                     if (this.transformControl) {
-                        this.transformControl.attach(hitPlanningMesh);
-                        if (this.config.onTransformActiveChange) this.config.onTransformActiveChange(true);
+                        // Always notify that an object was clicked to show its settings
+                        if (this.config.onTransformActiveChange) this.config.onTransformActiveChange(true, hitObjId);
+                        
+                        // BUT only attach transform capabilities to plane and cylinder
+                        if (hitObj && (hitObj.type === 'plane' || hitObj.type === 'cylinder')) {
+                            this.transformControl.attach(hitPlanningMesh);
+                        } else {
+                            this.transformControl.detach(); // Hide transform handles
+                        }
                         this.viewer.viewer.Render();
                     }
                 } else {
@@ -1803,6 +1835,11 @@ export class ViewerManager {
       if (this.viewer?.viewer) {
           try { this.viewer.viewer.Render(); } catch(e) {}
       }
+      
+      if (this.config.onPlanningObjectsChange) {
+          this.config.onPlanningObjectsChange(this.planningObjects);
+      }
+      
       this.saveToLocalStorage();
   }
 

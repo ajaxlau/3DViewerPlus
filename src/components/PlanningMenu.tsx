@@ -776,11 +776,6 @@ function PlanningObjectItem({ obj, viewerManager }: { obj: any, viewerManager: a
                   </div>
               </div>
               <div className="flex items-center gap-0.5 shrink-0 self-end w-full px-1 justify-end">
-                  {(obj.type !== 'measurement' && obj.type !== 'angle') && (
-                      <button onClick={() => setOpen(!open)} className={`p-1.5 rounded transition ${open ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/40 dark:text-blue-400' : 'text-slate-500 hover:bg-white dark:hover:bg-slate-800'}`} title="Adjust Dimensions">
-                          <SlidersHorizontal size={14} />
-                      </button>
-                  )}
                   <button onClick={() => viewerManager.duplicatePlanningObject(obj.id)} className="p-1.5 text-slate-500 hover:text-blue-500 dark:text-slate-400 dark:hover:text-blue-400 rounded hover:bg-white dark:hover:bg-slate-800 transition" title="Duplicate Object">
                       <Copy size={14} />
                   </button>
@@ -797,90 +792,6 @@ function PlanningObjectItem({ obj, viewerManager }: { obj: any, viewerManager: a
                   </button>
               </div>
           </div>
-
-          {open && (
-              <div className="p-3 bg-white dark:bg-slate-900 flex flex-col gap-4 border-t border-slate-200 dark:border-slate-800">
-
-                  {/* Dynamic absolute mm Sliders section */}
-                  {obj.type === 'plane' && (
-                      <div className="flex flex-col gap-2">
-                          <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Plane Geometry</div>
-                          <ScaleSliderRow 
-                              label="Width & Length Extension" 
-                              value={planeExtSize} 
-                              min={0} 
-                              max={100} 
-                              step={5}
-                              onChange={v => handlePlaneChange(v, undefined)} 
-                              isMm={true}
-                          />
-                          <ScaleSliderRow 
-                              label="Thickness" 
-                              value={planeThickness} 
-                              min={-1.0} 
-                              max={1.0} 
-                              step={0.1}
-                              onChange={v => handlePlaneChange(undefined, v)} 
-                              isMm={true}
-                          />
-                      </div>
-                  )}
-
-                  {obj.type === 'cylinder' && (
-                      <div className="flex flex-col gap-2">
-                          <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Cylinder Geometry</div>
-                          <ScaleSliderRow 
-                              label="Diameter" 
-                              value={cylinderDiameter} 
-                              min={0.1} 
-                              max={10.0} 
-                              step={0.1}
-                              onChange={v => handleCylinderChange(v, undefined)} 
-                              isMm={true}
-                          />
-                          <ScaleSliderRow 
-                              label="Extended Length" 
-                              value={cylinderExtension} 
-                              min={0} 
-                              max={100} 
-                              step={5}
-                              onChange={v => handleCylinderChange(undefined, v)} 
-                              isMm={true}
-                          />
-                      </div>
-                  )}
-
-                  {obj.type === 'curve' && (
-                      <div className="flex flex-col gap-2">
-                          <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Curve Geometry</div>
-                          <ScaleSliderRow 
-                              label="Curve Diameter" 
-                              value={curveDiameter} 
-                              min={0.1} 
-                              max={2.0} 
-                              step={0.1}
-                              onChange={v => updateCurveDiameter(v)} 
-                              isMm={true}
-                          />
-                      </div>
-                  )}
-
-                  {obj.type === 'point' && (
-                      <div className="flex flex-col gap-2">
-                          <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">Point Geometry</div>
-                          <ScaleSliderRow 
-                              label="Diameter" 
-                              value={pointDiameter} 
-                              min={0.1} 
-                              max={2.0} 
-                              step={0.1}
-                              onChange={v => updatePointDiameter(v)} 
-                              isMm={true}
-                          />
-                      </div>
-                  )}
-              </div>
-          )}
       </div>
   );
 }

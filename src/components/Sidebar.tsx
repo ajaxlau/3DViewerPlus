@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { useViewer } from '../context/ViewerContext';
-import { ChevronDown, Loader2, Eye, EyeOff, Droplets, Camera } from 'lucide-react';
+import { ChevronDown, Loader2, Eye, EyeOff, Droplets, Camera, X } from 'lucide-react';
 
-export function Sidebar({ collapsed }: { collapsed: boolean }) {
+export function Sidebar({ collapsed, onClose }: { collapsed: boolean, onClose?: () => void }) {
   const { 
     status, filename, meshes, globalOpacity, setGlobalOpacity, 
     toggleMeshVisibility, setMeshOpacity, highlightMesh, highlightedMeshId,
@@ -18,8 +18,15 @@ export function Sidebar({ collapsed }: { collapsed: boolean }) {
     <aside className={`transition-all duration-300 bg-slate-50 dark:bg-slate-900 flex-col overflow-y-auto overflow-x-hidden shrink-0 ${collapsed ? 'w-full md:w-0 h-0 md:h-auto opacity-0 border-none pointer-events-none' : 'w-full md:w-[280px] h-auto max-h-[50vh] md:max-h-none md:h-auto border-b md:border-b-0 md:border-r border-slate-200 dark:border-slate-800 flex'}`}>
       <div className="flex flex-col w-full min-h-min pb-5">
         
-        <div className="px-6 py-4 text-[11px] font-bold uppercase tracking-[0.05em] text-slate-400 border-b border-slate-200 dark:border-slate-800 break-all line-clamp-2 leading-normal">
-          {filename || '3D Model'}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900 shrink-0">
+          <h3 className="font-bold text-sm text-slate-800 dark:text-slate-100 uppercase tracking-widest flex items-center gap-2">
+            Visualization Tools
+          </h3>
+          {onClose && (
+            <button className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200" onClick={onClose}>
+              <X size={16} />
+            </button>
+          )}
         </div>
         {/* System Status Box */}
         {(!isEmpty && !status.includes('Loading') && !status.includes('Parsing') && !status.includes('Error')) ? null : (
