@@ -8,9 +8,8 @@ export function Modals() {
   // URL Modal state
   const [urlInput, setUrlInput] = useState('');
 
-  // Share & Embed states based on preview mode (blob) vs deployed
+  // Share state based on preview mode (blob) vs deployed
   const [shareVal, setShareVal] = useState('');
-  const [embedVal, setEmbedVal] = useState('');
   const [isSandbox, setIsSandbox] = useState(false);
 
   // Snapshot modal states
@@ -25,7 +24,7 @@ export function Modals() {
   const [shareFeedback, setShareFeedback] = useState('');
 
   useEffect(() => {
-    if (activeModal === 'share' || activeModal === 'embed') {
+    if (activeModal === 'share') {
       let baseUrl = window.location.href.split('#')[0].split('?')[0];
       const isSandboxUrl = baseUrl.startsWith('blob:') || baseUrl.includes('.webcomponent.local') || window.location.hostname === 'localhost' || window.location.hostname.includes('.run.app');
       setIsSandbox(isSandboxUrl);
@@ -33,14 +32,11 @@ export function Modals() {
       if (!isEmpty && loadedUrl) {
          if (isSandboxUrl) {
            setShareVal(`https://ajaxlau.github.io/New3DViewer/#model=${encodeURIComponent(loadedUrl)}`);
-           setEmbedVal(`<iframe width="640" height="480" style="border:1px solid #eeeeee;" src="https://ajaxlau.github.io/3DViewerPlus/#model=${encodeURIComponent(loadedUrl)}$backgroundcolor=240,240,240,255$defaultcolor=200,200,200$edgesettings=off,0,0,0,1"></iframe>`);
          } else {
            setShareVal(`${baseUrl}#model=${encodeURIComponent(loadedUrl)}`);
-           setEmbedVal(`<iframe width="640" height="480" style="border:1px solid #eeeeee;" src="${baseUrl}#model=${encodeURIComponent(loadedUrl)}$backgroundcolor=240,240,240,255$defaultcolor=200,200,200$edgesettings=off,0,0,0,1"></iframe>`);
          }
       } else {
          setShareVal('');
-         setEmbedVal('');
       }
     }
     
@@ -286,23 +282,19 @@ export function Modals() {
           </>
         )}
 
-        {/* -- SHARE & EMBED MODALS -- */}
-        {(activeModal === 'share' || activeModal === 'embed') && (
+        {/* -- SHARE MODAL -- */}
+        {activeModal === 'share' && (
            <>
-            <h3 className="text-[11px] uppercase tracking-widest font-bold mb-3 text-slate-800 dark:text-slate-200">{activeModal === 'share' ? 'Share Model' : 'Embed Model HTML'}</h3>
+            <h3 className="text-[11px] uppercase tracking-widest font-bold mb-3 text-slate-800 dark:text-slate-200">Share Model</h3>
             {!loadedUrl ? (
-                <p className="text-sm text-red-500 mb-5 font-mono">Please load a model from a URL first before {activeModal === 'share' ? 'sharing' : 'embedding'}. Local files cannot be {activeModal === 'share' ? 'shared via link' : 'embedded'}.</p>
+                <p className="text-sm text-red-500 mb-5 font-mono">Please load a model from a URL first before sharing. Local files cannot be shared via link.</p>
             ) : (
                 <>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mb-5 font-mono">
                   {isSandbox && <><strong className="text-red-500">Preview Mode:</strong> You are in a temporary sandbox. Once deployed, it will look like this:<br/><br/></>}
-                  {activeModal === 'share' ? 'Copy the link below to share this model:' : 'Copy the HTML code below to embed this model on your website:'}
+                  Copy the link below to share this model:
                 </p>
-                {activeModal === 'share' ? (
-                  <input readOnly value={shareVal} className="w-full p-3 mb-6 border border-slate-300 dark:border-slate-700 rounded-sm bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-mono text-sm outline-none" />
-                ) : (
-                  <textarea readOnly value={embedVal} className="w-full p-3 mb-6 border border-slate-300 dark:border-slate-700 rounded-sm bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-mono text-xs h-[100px] resize-none outline-none" />
-                )}
+                <input readOnly value={shareVal} className="w-full p-3 mb-6 border border-slate-300 dark:border-slate-700 rounded-sm bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-mono text-sm outline-none" />
                 </>
             )}
             <div className="flex justify-end items-center gap-3 mt-6 w-full">
@@ -314,6 +306,15 @@ export function Modals() {
               </button>
               {loadedUrl && (
                 <>
+                  <button 
+                    className="flex-1 max-w-[130px] h-10 px-3 rounded-sm text-xs font-bold uppercase tracking-widest bg-[#E3E8ED] text-black hover:bg-[#D3D8DD] border-none shadow-sm transition-colors flex items-center justify-center text-center font-bold" 
+                    onClick={() => {
+                        const emailBody = `Check out this 3D model:\n\n${shareVal}`;
+                        window.open(`mailto:?subject=${encodeURIComponent("Shared 3D Model")}&body=${encodeURIComponent(emailBody)}`);
+                    }}
+                  >
+                    <span className="truncate">Email</span>
+                  </button>
                   {activeModal === 'share' && (
                       <button 
                         className="flex-1 max-w-[130px] h-10 px-3 rounded-sm text-xs font-bold uppercase tracking-widest bg-green-600 text-white hover:bg-green-700 border-none shadow-sm transition-colors flex items-center justify-center gap-1.5 text-center font-bold" 
@@ -326,7 +327,7 @@ export function Modals() {
                                     if (dataUrl && navigator.canShare) {
                                         const blob = dataURIToBlob(dataUrl);
                                         const dlName = filename || 'snapshot';
-                                        const file = new File([blob], `${dlName.replace(/\\.[^/.]+$/, "")}_snapshot.png`, { type: 'image/png' });
+                                        const file = new File([blob], `${dlName.replace(/\.[^/.]+$/, "")}_snapshot.png`, { type: 'image/png' });
                                         if (navigator.canShare({ files: [file] })) {
                                             await navigator.share({
                                                 title: '3D Model',
@@ -352,9 +353,9 @@ export function Modals() {
                   )}
                   <button 
                     className="flex-1 max-w-[130px] h-10 px-3 rounded-sm text-xs font-bold uppercase tracking-widest bg-blue-600 text-white hover:bg-blue-700 border-none shadow-sm transition-colors flex items-center justify-center text-center font-bold" 
-                    onClick={() => copyToClipboard(activeModal === 'share' ? shareVal : embedVal)}
+                    onClick={() => copyToClipboard(shareVal)}
                   >
-                    <span className="truncate">{copied ? "Copied!" : `Copy ${activeModal === 'share' ? 'Link' : 'Code'}`}</span>
+                    <span className="truncate">{copied ? "Copied!" : "Copy Link"}</span>
                   </button>
                 </>
               )}

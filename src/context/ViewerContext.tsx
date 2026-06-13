@@ -40,8 +40,8 @@ interface ViewerContextState {
   isAutoRotating: boolean;
   setIsAutoRotating: (val: boolean) => void;
   // Modals state
-  activeModal: 'url' | 'share' | 'embed' | 'snapshot' | 'planning' | null;
-  setActiveModal: (modal: 'url' | 'share' | 'embed' | 'snapshot' | 'planning' | null) => void;
+  activeModal: 'url' | 'share' | 'snapshot' | 'planning' | null;
+  setActiveModal: (modal: 'url' | 'share' | 'snapshot' | 'planning' | null) => void;
 
   // Planning Tools
   planningMode: 'none' | 'plane' | 'cylinder' | 'measure' | 'curve' | 'angle' | 'point';
