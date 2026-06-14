@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useViewer } from '../context/ViewerContext';
+import { QRCodeSVG } from 'qrcode.react';
 import JSZip from 'jszip';
 
 export function Modals() {
@@ -292,9 +293,14 @@ export function Modals() {
                 <>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mb-5 font-mono">
                   {isSandbox && <><strong className="text-red-500">Preview Mode:</strong> You are in a temporary sandbox. Once deployed, it will look like this:<br/><br/></>}
-                  Copy the link below to share this model:
+                  Scan the QR code or copy the link below to share this model:
                 </p>
-                <input readOnly value={shareVal} className="w-full p-3 mb-6 border border-slate-300 dark:border-slate-700 rounded-sm bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-mono text-sm outline-none" />
+                <div className="flex flex-col gap-4 mb-6">
+                  <div className="flex justify-center bg-white p-4 rounded-md border border-slate-200 dark:border-slate-800">
+                    <QRCodeSVG value={shareVal} size={160} level={"H"} />
+                  </div>
+                  <input readOnly value={shareVal} className="w-full p-3 border border-slate-300 dark:border-slate-700 rounded-sm bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-mono text-sm outline-none" />
+                </div>
                 </>
             )}
             <div className="flex justify-end items-center gap-3 mt-6 w-full">
@@ -306,15 +312,6 @@ export function Modals() {
               </button>
               {loadedUrl && (
                 <>
-                  <button 
-                    className="flex-1 max-w-[130px] h-10 px-3 rounded-sm text-xs font-bold uppercase tracking-widest bg-[#E3E8ED] text-black hover:bg-[#D3D8DD] border-none shadow-sm transition-colors flex items-center justify-center text-center font-bold" 
-                    onClick={() => {
-                        const emailBody = `Check out this 3D model:\n\n${shareVal}`;
-                        window.open(`mailto:?subject=${encodeURIComponent("Shared 3D Model")}&body=${encodeURIComponent(emailBody)}`);
-                    }}
-                  >
-                    <span className="truncate">Email</span>
-                  </button>
                   {activeModal === 'share' && (
                       <button 
                         className="flex-1 max-w-[130px] h-10 px-3 rounded-sm text-xs font-bold uppercase tracking-widest bg-green-600 text-white hover:bg-green-700 border-none shadow-sm transition-colors flex items-center justify-center gap-1.5 text-center font-bold" 
