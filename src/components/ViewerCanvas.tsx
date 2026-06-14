@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useViewer } from '../context/ViewerContext';
-import { BoxSelect, Camera, Move, RotateCw, Scaling, Info } from 'lucide-react';
+import { BoxSelect, Camera, Move, RotateCw, Scaling, Info, Plus } from 'lucide-react';
 
 export function ViewerCanvas() {
   const { 
@@ -11,19 +11,24 @@ export function ViewerCanvas() {
   } = useViewer();
   const [isDragging, setIsDragging] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
+  const [showQuickMenu, setShowQuickMenu] = useState(false);
   const infoRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (infoRef.current && !infoRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      if (infoRef.current && !infoRef.current.contains(target) && menuRef.current && !menuRef.current.contains(target)) {
         setShowInfo(false);
+        setShowQuickMenu(false);
       }
     }
     function handleWindowBlur() {
         setShowInfo(false);
+        setShowQuickMenu(false);
     }
     
-    if (showInfo) {
+    if (showInfo || showQuickMenu) {
       document.addEventListener('mousedown', handleClickOutside);
       window.addEventListener('blur', handleWindowBlur);
     }
@@ -31,7 +36,7 @@ export function ViewerCanvas() {
       document.removeEventListener('mousedown', handleClickOutside);
       window.removeEventListener('blur', handleWindowBlur);
     };
-  }, [showInfo]);
+  }, [showInfo, showQuickMenu]);
   
   const handleOpenFiles = () => {
     const input = document.createElement('input');
@@ -149,55 +154,71 @@ export function ViewerCanvas() {
 
       {/* Floating Action Buttons */}
       {!isEmpty && (
-        <>
-          <div ref={infoRef}>
-            <button
-              onClick={() => setShowInfo(!showInfo)}
-              className="absolute bottom-6 left-6 z-20 w-12 h-12 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 hover:from-blue-500 hover:to-indigo-400 text-white flex items-center justify-center shadow-[0_4px_14px_0_rgba(59,130,246,0.39)] transition-all hover:shadow-[0_6px_20px_rgba(59,130,246,0.23)] hover:-translate-y-0.5 active:translate-y-0 active:scale-95 group focus:outline-none"
-              title="Shortcuts Info"
-            >
-              <Info size={20} className="transition-transform group-hover:scale-110" />
-            </button>
-            
-            {showInfo && (
-              <div className="absolute bottom-20 left-6 z-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md rounded-xl p-5 border border-slate-200/50 dark:border-slate-700/50 shadow-xl w-80 pointer-events-auto">
-              <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-3 uppercase tracking-wider">Controls & Shortcuts</h3>
-              <ul className="text-xs text-slate-600 dark:text-slate-400 space-y-3">
-                <li className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2">
-                  <span>Reset Camera</span>
-                  <kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-800 rounded font-mono text-[10px] shadow-sm font-bold text-slate-700 dark:text-slate-300">R</kbd>
-                </li>
-                <li className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2">
-                  <span>Rotate</span>
-                  <kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-800 rounded font-mono text-[10px] shadow-sm font-bold text-slate-700 dark:text-slate-300">Left Click & Drag</kbd>
-                </li>
-                <li className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2">
-                  <span>Pan</span>
-                  <kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-800 rounded font-mono text-[10px] shadow-sm font-bold text-slate-700 dark:text-slate-300">Middle Click & Drag</kbd>
-                </li>
-                <li className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2">
-                  <span>Zoom In / Out</span>
-                  <div className="flex gap-1">
-                      <kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-800 rounded font-mono text-[10px] shadow-sm font-bold text-slate-700 dark:text-slate-300">Scroll</kbd>
-                  </div>
-                </li>
-		<li className="flex justify-between items-center pt-1">
-			<span>Smooth Zoom</span>
-			<kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-800 rounded font-mono text-[10px] shadow-sm font-bold text-slate-700 dark:text-slate-300">Ctrl + Left Click & Drag</kbd>
-		</li>
-              </ul>
-            </div>
-          )}
-          </div>
-
+        <div ref={menuRef} className="absolute bottom-6 left-6 z-20 flex flex-col-reverse items-center gap-3">
           <button
-            onClick={handleQuickSnapshotShare}
-            className="absolute bottom-6 right-6 z-20 w-12 h-12 rounded-full bg-gradient-to-tr from-blue-600 to-indigo-500 hover:from-blue-500 hover:to-indigo-400 text-white flex items-center justify-center shadow-[0_4px_14px_0_rgba(59,130,246,0.39)] transition-all hover:shadow-[0_6px_20px_rgba(59,130,246,0.23)] hover:-translate-y-0.5 active:translate-y-0 active:scale-95 group focus:outline-none"
-            title="Share Snapshot"
+            onClick={() => setShowQuickMenu(!showQuickMenu)}
+            className={`w-12 h-12 rounded-full flex items-center justify-center transition-all focus:outline-none shadow-[0_4px_14px_0_rgba(59,130,246,0.39)] hover:shadow-[0_6px_20px_rgba(59,130,246,0.23)] hover:-translate-y-0.5 active:translate-y-0 active:scale-95 z-30
+              ${showQuickMenu ? 'bg-slate-800 text-white dark:bg-white dark:text-slate-900 rotate-45' : 'bg-gradient-to-tr from-blue-600 to-indigo-500 hover:from-blue-500 hover:to-indigo-400 text-white'}`}
+            title="Quick Menu"
           >
-            <Camera size={20} className="transition-transform group-hover:scale-110" />
+            <Plus size={24} className="transition-transform duration-300" />
           </button>
-        </>
+          
+          <div className={`flex flex-col gap-3 transition-all duration-300 origin-bottom ${showQuickMenu ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto' : 'opacity-0 scale-95 translate-y-4 pointer-events-none'}`}>
+            <button
+              onClick={handleQuickSnapshotShare}
+              className="w-10 h-10 rounded-full bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center shadow-lg transition-all hover:bg-slate-50 dark:hover:bg-slate-700 hover:-translate-y-0.5 active:translate-y-0 active:scale-95 focus:outline-none border border-slate-200 dark:border-slate-700"
+              title="Share Snapshot"
+            >
+              <Camera size={18} />
+            </button>
+
+            <div ref={infoRef} className="relative">
+              <button
+                onClick={(e) => { e.stopPropagation(); setShowInfo(!showInfo); }}
+                className={`w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-all hover:-translate-y-0.5 active:translate-y-0 active:scale-95 focus:outline-none border
+                  ${showInfo ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800/50' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+                title="Shortcuts Info"
+              >
+                <Info size={18} />
+              </button>
+              
+              {showInfo && (
+                <div className="absolute bottom-[-10px] left-14 z-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md rounded-xl p-5 border border-slate-200/50 dark:border-slate-700/50 shadow-xl w-80 pointer-events-auto origin-bottom-left animate-in fade-in zoom-in-95 duration-200">
+                  <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-3 uppercase tracking-wider">Controls & Shortcuts</h3>
+                  <ul className="text-xs text-slate-600 dark:text-slate-400 space-y-3">
+                    <li className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2">
+                      <span>Reset Camera</span>
+                      <kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-800 rounded font-mono text-[10px] shadow-sm font-bold text-slate-700 dark:text-slate-300">R</kbd>
+                    </li>
+                    <li className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2">
+                      <span>Switch Views (Front/Back/Left...)</span>
+                      <kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-800 rounded font-mono text-[10px] shadow-sm font-bold text-slate-700 dark:text-slate-300">1 - 6</kbd>
+                    </li>
+                    <li className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2">
+                      <span>Rotate</span>
+                      <kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-800 rounded font-mono text-[10px] shadow-sm font-bold text-slate-700 dark:text-slate-300">Left Click & Drag</kbd>
+                    </li>
+                    <li className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2">
+                      <span>Pan</span>
+                      <kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-800 rounded font-mono text-[10px] shadow-sm font-bold text-slate-700 dark:text-slate-300">Middle Click & Drag</kbd>
+                    </li>
+                    <li className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2">
+                      <span>Zoom In / Out</span>
+                      <div className="flex gap-1">
+                          <kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-800 rounded font-mono text-[10px] shadow-sm font-bold text-slate-700 dark:text-slate-300">Scroll</kbd>
+                      </div>
+                    </li>
+                    <li className="flex justify-between items-center pt-1">
+                      <span>Smooth Zoom</span>
+                      <kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-800 rounded font-mono text-[10px] shadow-sm font-bold text-slate-700 dark:text-slate-300">Ctrl + Left Click & Drag</kbd>
+                    </li>
+                  </ul>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Active Object overlay settings */}

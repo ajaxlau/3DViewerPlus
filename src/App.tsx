@@ -71,6 +71,18 @@ function MainLayout() {
       if (viewerManager) {
         if (e.key.toLowerCase() === 'r') {
           viewerManager.resetCamera();
+        } else if (e.key === '1') {
+          viewerManager.setView('front');
+        } else if (e.key === '2') {
+          viewerManager.setView('back');
+        } else if (e.key === '3') {
+          viewerManager.setView('left');
+        } else if (e.key === '4') {
+          viewerManager.setView('right');
+        } else if (e.key === '5') {
+          viewerManager.setView('top');
+        } else if (e.key === '6') {
+          viewerManager.setView('bottom');
         }
       }
       

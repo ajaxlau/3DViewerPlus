@@ -310,22 +310,144 @@ export class ViewerManager {
     }
   }
 
+  tweenCamera(targetCamera: any, durationMs: number = 400) {
+    if (!this.viewer?.viewer?.navigation) return;
+    const nav = this.viewer.viewer.navigation;
+    
+    let startCam: any = null;
+    if (typeof nav.GetCamera === 'function') {
+        startCam = nav.GetCamera();
+    } else if (nav.camera) {
+        const threeCam = nav.camera;
+        startCam = new window.OV.Camera(
+            new window.OV.Coord3D(threeCam.position.x, threeCam.position.y, threeCam.position.z),
+            new window.OV.Coord3D(nav.controls?.target?.x || 0, nav.controls?.target?.y || 0, nav.controls?.target?.z || 0),
+            new window.OV.Coord3D(threeCam.up.x, threeCam.up.y, threeCam.up.z),
+            threeCam.fov || 45.0
+        );
+    }
+    
+    if (!startCam) {
+        nav.SetCamera(targetCamera);
+        if (this.viewer.viewer.scene) {
+            try { this.viewer.viewer.Render(); } catch(e) {}
+        }
+        return;
+    }
+    
+    const startTime = performance.now();
+    const animate = (time: number) => {
+        const elapsed = time - startTime;
+        let t = Math.min(elapsed / durationMs, 1.0);
+        
+        // easeInOutQuad
+        t = t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+        
+        const eye = new window.OV.Coord3D(
+            startCam.eye.x + (targetCamera.eye.x - startCam.eye.x) * t,
+            startCam.eye.y + (targetCamera.eye.y - startCam.eye.y) * t,
+            startCam.eye.z + (targetCamera.eye.z - startCam.eye.z) * t
+        );
+        const center = new window.OV.Coord3D(
+            startCam.center.x + (targetCamera.center.x - startCam.center.x) * t,
+            startCam.center.y + (targetCamera.center.y - startCam.center.y) * t,
+            startCam.center.z + (targetCamera.center.z - startCam.center.z) * t
+        );
+        const up = new window.OV.Coord3D(
+            startCam.up.x + (targetCamera.up.x - startCam.up.x) * t,
+            startCam.up.y + (targetCamera.up.y - startCam.up.y) * t,
+            startCam.up.z + (targetCamera.up.z - startCam.up.z) * t
+        );
+        
+        const fov = startCam.fov + (targetCamera.fov - startCam.fov) * t;
+        
+        nav.SetCamera(new window.OV.Camera(eye, center, up, fov));
+        if (this.viewer.viewer.scene) {
+            try { this.viewer.viewer.Render(); } catch(e) {}
+        }
+        
+        if (t < 1.0) {
+            requestAnimationFrame(animate);
+        }
+    };
+    
+    requestAnimationFrame(animate);
+  }
+
   resetCamera() {
     if (this.viewer && this.viewer.viewer && this.viewer.viewer.navigation && this.defaultCamera) {
-      this.viewer.viewer.navigation.SetCamera(
-          new window.OV.Camera(
-              new window.OV.Coord3D(this.defaultCamera.eye.x, this.defaultCamera.eye.y, this.defaultCamera.eye.z),
-              new window.OV.Coord3D(this.defaultCamera.center.x, this.defaultCamera.center.y, this.defaultCamera.center.z),
-              new window.OV.Coord3D(this.defaultCamera.up.x, this.defaultCamera.up.y, this.defaultCamera.up.z),
-              this.defaultCamera.fov || 45.0
-          )
+      const targetCamera = new window.OV.Camera(
+          new window.OV.Coord3D(this.defaultCamera.eye.x, this.defaultCamera.eye.y, this.defaultCamera.eye.z),
+          new window.OV.Coord3D(this.defaultCamera.center.x, this.defaultCamera.center.y, this.defaultCamera.center.z),
+          new window.OV.Coord3D(this.defaultCamera.up.x, this.defaultCamera.up.y, this.defaultCamera.up.z),
+          this.defaultCamera.fov || 45.0
       );
-      if (this.viewer.viewer.scene) {
-        try { this.viewer.viewer.Render(); } catch(e) {}
-      }
+      this.tweenCamera(targetCamera, 500);
     } else {
       this.fitToWindow();
     }
+  }
+
+  setView(view: 'top' | 'bottom' | 'front' | 'back' | 'left' | 'right') {
+    if (!this.viewer?.viewer?.navigation) return;
+    const nav = this.viewer.viewer.navigation;
+    
+    let center = new window.OV.Coord3D(0, 0, 0);
+    let distance = 100;
+    
+    let originalCam: any = null;
+    if (typeof nav.GetCamera === 'function') {
+        originalCam = nav.GetCamera();
+    } else if (nav.camera) {
+        const threeCam = nav.camera;
+        originalCam = new window.OV.Camera(
+            new window.OV.Coord3D(threeCam.position.x, threeCam.position.y, threeCam.position.z),
+            new window.OV.Coord3D(nav.controls?.target?.x || 0, nav.controls?.target?.y || 0, nav.controls?.target?.z || 0),
+            new window.OV.Coord3D(threeCam.up.x, threeCam.up.y, threeCam.up.z),
+            threeCam.fov || 45.0
+        );
+    }
+    
+    if (originalCam) {
+        center = originalCam.center;
+        const dx = originalCam.eye.x - center.x;
+        const dy = originalCam.eye.y - center.y;
+        const dz = originalCam.eye.z - center.z;
+        distance = Math.sqrt(dx*dx + dy*dy + dz*dz) || 100;
+    }
+    
+    let eye = new window.OV.Coord3D(0, 0, 0);
+    let up = new window.OV.Coord3D(0, 0, 1);
+    
+    switch (view) {
+        case 'top':
+            eye = new window.OV.Coord3D(center.x, center.y, center.z + distance);
+            up = new window.OV.Coord3D(0, 1, 0);
+            break;
+        case 'bottom':
+            eye = new window.OV.Coord3D(center.x, center.y, center.z - distance);
+            up = new window.OV.Coord3D(0, -1, 0);
+            break;
+        case 'front':
+            eye = new window.OV.Coord3D(center.x, center.y - distance, center.z);
+            up = new window.OV.Coord3D(0, 0, 1);
+            break;
+        case 'back':
+            eye = new window.OV.Coord3D(center.x, center.y + distance, center.z);
+            up = new window.OV.Coord3D(0, 0, 1);
+            break;
+        case 'left':
+            eye = new window.OV.Coord3D(center.x - distance, center.y, center.z);
+            up = new window.OV.Coord3D(0, 0, 1);
+            break;
+        case 'right':
+            eye = new window.OV.Coord3D(center.x + distance, center.y, center.z);
+            up = new window.OV.Coord3D(0, 0, 1);
+            break;
+    }
+    
+    const targetCamera = new window.OV.Camera(eye, center, up, originalCam?.fov || 45.0);
+    this.tweenCamera(targetCamera, 500);
   }
 
   dispose() {
@@ -793,10 +915,14 @@ export class ViewerManager {
             if (child.material) {
                 const materials = Array.isArray(child.material) ? child.material : [child.material];
                 materials.forEach((mat: any) => {
+                   if (mat._originalSide === undefined) {
+                       mat._originalSide = mat.side;
+                   }
                    mat.transparent = val < 1.0;
                    mat.opacity = val;
                    mat.needsUpdate = true;
                    mat.depthWrite = val === 1.0;
+                   mat.side = val < 1.0 ? window.THREE.FrontSide : mat._originalSide;
                 });
             }
         }
@@ -809,10 +935,14 @@ export class ViewerManager {
     if (mesh && mesh.material) {
       const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
       materials.forEach((mat: any) => { 
+        if (mat._originalSide === undefined) {
+            mat._originalSide = mat.side;
+        }
         mat.transparent = val < 1.0; 
         mat.opacity = val; 
         mat.needsUpdate = true; 
         mat.depthWrite = val === 1.0; 
+        mat.side = val < 1.0 ? window.THREE.FrontSide : mat._originalSide;
       });
       try { this.viewer.viewer.Render(); } catch(err) {}
     }
