@@ -296,7 +296,7 @@ export function Modals() {
                   Scan the QR code or copy the link below to share this model:
                 </p>
                 <div className="flex flex-col gap-4 mb-6">
-                  <div className="flex justify-center bg-white p-4 rounded-md border border-slate-200 dark:border-slate-800">
+                  <div className="bg-white p-4 rounded-md border border-slate-200 dark:border-slate-800 mx-auto">
                     <QRCodeSVG value={shareVal} size={160} level={"H"} />
                   </div>
                   <input readOnly value={shareVal} className="w-full p-3 border border-slate-300 dark:border-slate-700 rounded-sm bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-mono text-sm outline-none" />
