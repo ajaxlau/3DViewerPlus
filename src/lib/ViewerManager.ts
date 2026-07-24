@@ -63,6 +63,13 @@ export class ViewerManager {
   rotationStartPos: any = null;
   rotationAxisName: string | null = null;
 
+  // Translation Visual Cue state
+  isTranslatingTool: boolean = false;
+  translationCueGroup: any = null;
+  translationBadgeDiv: HTMLDivElement | null = null;
+  translationStartPos: any = null;
+  translationAxisName: string | null = null;
+
   // Memory Leak Prevention & Disposal tracking
   isDisposed: boolean = false;
   resizeObserver: ResizeObserver | null = null;
@@ -296,6 +303,9 @@ export class ViewerManager {
         if (this.isRotatingTool) {
             this.updateRotationVisualCue();
         }
+        if (this.isTranslatingTool) {
+            this.updateTranslationVisualCue();
+        }
         if (this.config.onPlanningObjectsChange) {
             this.config.onPlanningObjectsChange([...this.planningObjects]);
         }
@@ -305,11 +315,16 @@ export class ViewerManager {
            v.navigation.isTransforming = event.value;
        }
        if (event.value) {
-           if (this.transformControl && this.transformControl.mode === 'rotate' && this.transformControl.object) {
-               this.startRotationVisualCue();
+           if (this.transformControl && this.transformControl.object) {
+               if (this.transformControl.mode === 'rotate') {
+                   this.startRotationVisualCue();
+               } else if (this.transformControl.mode === 'translate') {
+                   this.startTranslationVisualCue();
+               }
            }
        } else {
            this.clearRotationVisualCue();
+           this.clearTranslationVisualCue();
            broadcastTransformChange();
            if (this.config.onPlanningObjectsChange) {
                this.config.onPlanningObjectsChange([...this.planningObjects]);
@@ -515,6 +530,7 @@ export class ViewerManager {
     
     // 6.5 Dispose TransformControls properly
     this.clearRotationVisualCue();
+    this.clearTranslationVisualCue();
     if (this.transformControl) {
         if (this.viewer && this.viewer.viewer) {
             const v = this.viewer.viewer;
@@ -1145,6 +1161,7 @@ export class ViewerManager {
 
   setTransformMode(mode: 'translate' | 'rotate' | 'scale') {
     this.clearRotationVisualCue();
+    this.clearTranslationVisualCue();
     if (this.transformControl) {
       this.transformControl.setMode(mode);
       this.transformControl.setSpace('local');
@@ -1475,6 +1492,226 @@ export class ViewerManager {
         this.rotationBadgeDiv.parentElement.removeChild(this.rotationBadgeDiv);
       }
       this.rotationBadgeDiv = null;
+    }
+
+    if (this.viewer?.viewer) {
+      try {
+        this.viewer.viewer.Render();
+      } catch (e) {}
+    }
+  }
+
+  // --- TRANSLATION VISUAL CUE PIPELINE ---
+
+  startTranslationVisualCue() {
+    if (!this.transformControl || !this.transformControl.object || !window.THREE) return;
+    const mesh = this.transformControl.object;
+    
+    // Find associated planning object (e.g. plane or cylinder)
+    const planObj = this.planningObjects.find(o => o.mesh === mesh);
+    if (!planObj || (planObj.type !== 'plane' && planObj.type !== 'cylinder')) {
+      return;
+    }
+
+    this.isTranslatingTool = true;
+    this.translationStartPos = mesh.position.clone();
+    
+    // Extract axis being translated ('X', 'Y', 'Z', 'XY', 'XZ', 'YZ', 'XYZ', etc.)
+    const rawAxis = (this.transformControl.axis || 'XYZ').toUpperCase();
+    this.translationAxisName = rawAxis;
+
+    const v = this.viewer?.viewer;
+    const scene = v?.scene || v?.mainScene;
+    if (!scene) return;
+
+    // Create container group for 3D overlay guide lines & markers
+    if (!this.translationCueGroup) {
+      this.translationCueGroup = new window.THREE.Group();
+      this.translationCueGroup.userData = { isCustomOverlay: true };
+      scene.add(this.translationCueGroup);
+    }
+
+    // Create 2D DOM badge label if not present
+    if (!this.translationBadgeDiv) {
+      const div = document.createElement('div');
+      div.className = 'absolute z-50 pointer-events-none font-mono text-xs font-bold text-white bg-slate-900/90 border rounded-full px-3 py-1.5 shadow-2xl backdrop-blur-md flex items-center gap-2 transition-opacity whitespace-nowrap tracking-tight select-none';
+      div.style.left = '50%';
+      div.style.top = '24px';
+      div.style.transform = 'translateX(-50%)';
+      div.style.opacity = '0';
+      this.container.appendChild(div);
+      this.translationBadgeDiv = div;
+    }
+
+    this.updateTranslationVisualCue();
+  }
+
+  updateTranslationVisualCue() {
+    if (!this.isTranslatingTool || !this.transformControl || !this.transformControl.object || !window.THREE) return;
+    const THREE = window.THREE;
+    const mesh = this.transformControl.object;
+    const planObj = this.planningObjects.find(o => o.mesh === mesh);
+
+    if (!planObj) return;
+
+    const startPos = this.translationStartPos ? this.translationStartPos.clone() : mesh.position.clone();
+    const currentPos = mesh.position.clone();
+    const deltaPos = currentPos.clone().sub(startPos);
+
+    const axisName = (this.translationAxisName || 'XYZ').toUpperCase();
+
+    // Determine color and styling based on axis
+    let axisColorHex = 0x8b5cf6; // Purple (Multi-axis/Free)
+    let axisColorCss = '#8b5cf6';
+    let borderColorCss = 'border-purple-500';
+
+    if (axisName === 'X') {
+      axisColorHex = 0xef4444; // Red
+      axisColorCss = '#ef4444';
+      borderColorCss = 'border-red-500';
+    } else if (axisName === 'Y') {
+      axisColorHex = 0x22c55e; // Green
+      axisColorCss = '#22c55e';
+      borderColorCss = 'border-emerald-500';
+    } else if (axisName === 'Z') {
+      axisColorHex = 0x3b82f6; // Blue
+      axisColorCss = '#3b82f6';
+      borderColorCss = 'border-blue-500';
+    }
+
+    // Format displacement / distance readout
+    let valueText = '';
+    const totalDist = deltaPos.length();
+
+    if (axisName === 'X') {
+      const val = deltaPos.x;
+      valueText = `${val >= 0 ? '+' : ''}${val.toFixed(2)} mm`;
+    } else if (axisName === 'Y') {
+      const val = deltaPos.y;
+      valueText = `${val >= 0 ? '+' : ''}${val.toFixed(2)} mm`;
+    } else if (axisName === 'Z') {
+      const val = deltaPos.z;
+      valueText = `${val >= 0 ? '+' : ''}${val.toFixed(2)} mm`;
+    } else {
+      valueText = `${totalDist >= 0 ? '+' : ''}${totalDist.toFixed(2)} mm (ΔX:${deltaPos.x >= 0 ? '+' : ''}${deltaPos.x.toFixed(1)}, ΔY:${deltaPos.y >= 0 ? '+' : ''}${deltaPos.y.toFixed(1)}, ΔZ:${deltaPos.z >= 0 ? '+' : ''}${deltaPos.z.toFixed(1)})`;
+    }
+
+    // --- Update 2D Floating DOM Badge ---
+    if (this.translationBadgeDiv) {
+      const objLabel = planObj.name ? `${planObj.name} • ` : '';
+      
+      this.translationBadgeDiv.className = `absolute z-50 pointer-events-none font-mono text-xs font-bold text-white bg-slate-900/90 border ${borderColorCss} rounded-full px-3 py-1.5 shadow-2xl backdrop-blur-md flex items-center gap-2 transition-opacity whitespace-nowrap tracking-tight select-none`;
+      this.translationBadgeDiv.innerHTML = `
+        <span class="w-2.5 h-2.5 rounded-full animate-pulse" style="background-color: ${axisColorCss}"></span>
+        <span class="text-slate-300 font-semibold uppercase text-[10px] tracking-wider">${objLabel}${axisName}-TRANSLATION:</span>
+        <span class="text-amber-400 font-bold text-sm">${valueText}</span>
+      `;
+
+      // Position badge in the middle top of the canvas
+      this.translationBadgeDiv.style.left = '50%';
+      this.translationBadgeDiv.style.top = '24px';
+      this.translationBadgeDiv.style.transform = 'translateX(-50%)';
+      this.translationBadgeDiv.style.opacity = '1';
+    }
+
+    // --- Update 3D Overlay Group (Guideline Vector & Origin/Target Markers) ---
+    if (this.translationCueGroup && this.viewer?.viewer) {
+      // Clear previous 3D children in cue group
+      while (this.translationCueGroup.children.length > 0) {
+        const child = this.translationCueGroup.children[0];
+        this.translationCueGroup.remove(child);
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) {
+          if (Array.isArray(child.material)) {
+            child.material.forEach((m: any) => m.dispose());
+          } else {
+            child.material.dispose();
+          }
+        }
+      }
+
+      this.translationCueGroup.position.set(0, 0, 0);
+
+      // Determine marker size based on tool dimensions
+      let S = 10;
+      if (planObj.type === 'plane') {
+        S = Math.max(planObj.width || 30, planObj.height || 30) * 0.05;
+      } else if (planObj.type === 'cylinder') {
+        S = Math.max(planObj.length || 30, (planObj.diameter || 2) * 10) * 0.05;
+      }
+      S = Math.max(2, S);
+
+      // 1. Origin Marker Sphere at startPos
+      const originGeom = new THREE.SphereGeometry(S, 16, 16);
+      const originMat = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        depthTest: false,
+        transparent: true,
+        opacity: 0.9
+      });
+      const originMesh = new THREE.Mesh(originGeom, originMat);
+      originMesh.position.copy(startPos);
+      originMesh.renderOrder = 9999;
+      this.translationCueGroup.add(originMesh);
+
+      // 2. Vector line from startPos to currentPos
+      if (totalDist > 0.01) {
+        const lineGeom = new THREE.BufferGeometry().setFromPoints([startPos, currentPos]);
+        const lineMat = new THREE.LineBasicMaterial({
+          color: axisColorHex,
+          linewidth: 3,
+          depthTest: false
+        });
+        const vectorLine = new THREE.Line(lineGeom, lineMat);
+        vectorLine.renderOrder = 9999;
+        this.translationCueGroup.add(vectorLine);
+
+        // 3. Current Target Marker Sphere / Arrow tip at currentPos
+        const targetGeom = new THREE.SphereGeometry(S * 0.8, 16, 16);
+        const targetMat = new THREE.MeshBasicMaterial({
+          color: 0xf59e0b, // Amber active tip
+          depthTest: false
+        });
+        const targetMesh = new THREE.Mesh(targetGeom, targetMat);
+        targetMesh.position.copy(currentPos);
+        targetMesh.renderOrder = 9999;
+        this.translationCueGroup.add(targetMesh);
+      }
+
+      try {
+        this.viewer.viewer.Render();
+      } catch (e) {}
+    }
+  }
+
+  clearTranslationVisualCue() {
+    this.isTranslatingTool = false;
+    this.translationStartPos = null;
+    this.translationAxisName = null;
+
+    if (this.translationCueGroup && this.viewer?.viewer) {
+      const scene = this.viewer.viewer.scene || this.viewer.viewer.mainScene;
+      if (scene) {
+        scene.remove(this.translationCueGroup);
+        this.translationCueGroup.traverse((child: any) => {
+          if (child.geometry) child.geometry.dispose();
+          if (child.material) {
+            if (Array.isArray(child.material)) {
+              child.material.forEach((m: any) => m.dispose());
+            } else {
+              child.material.dispose();
+            }
+          }
+        });
+      }
+    }
+    this.translationCueGroup = null;
+
+    if (this.translationBadgeDiv) {
+      if (this.translationBadgeDiv.parentElement) {
+        this.translationBadgeDiv.parentElement.removeChild(this.translationBadgeDiv);
+      }
+      this.translationBadgeDiv = null;
     }
 
     if (this.viewer?.viewer) {
