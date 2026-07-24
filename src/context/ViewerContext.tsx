@@ -13,6 +13,7 @@ interface ViewerContextState {
   theme: 'light' | 'dark';
   setTheme: (theme: 'light' | 'dark') => void;
   status: string;
+  loadingProgress: number;
   isEmpty: boolean;
   meshes: MeshInfo[];
   filename: string | null;
@@ -72,6 +73,7 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
   const [viewerManager, setViewerManager] = useState<ViewerManager | null>(null);
   const [theme, setThemeState] = useState<'light'|'dark'>('light');
   const [status, setStatus] = useState<string>('No model loaded.\nPlease open a file.');
+  const [loadingProgress, setLoadingProgress] = useState(0);
   const [isEmpty, setIsEmpty] = useState(true);
   const [meshes, setMeshes] = useState<MeshInfo[]>([]);
   const [filename, setFilename] = useState<string | null>(null);
@@ -158,6 +160,7 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
           if (name !== undefined) setFilename(name);
           if (url !== undefined) setLoadedUrl(url);
         },
+        onProgressChange: (p) => setLoadingProgress(p),
         onMeshesChange: (newMeshes) => setMeshes(newMeshes),
         onMeshHighlighted: (id) => setHighlightedMeshId(id),
         onPlanningObjectsChange: (objects) => setPlanningObjects([...objects]),
@@ -255,7 +258,7 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
 
   return (
     <ViewerContext.Provider value={{
-      viewerManager, theme, setTheme, status, isEmpty, meshes, filename, loadedUrl,
+      viewerManager, theme, setTheme, status, loadingProgress, isEmpty, meshes, filename, loadedUrl,
       globalOpacity, setGlobalOpacity, isClipping, setIsClipping,
       clipPlanes, updateClipPlane, explodeValue, setExplodeValue,
       toggleMeshVisibility, setMeshOpacity, highlightMesh, highlightedMeshId,

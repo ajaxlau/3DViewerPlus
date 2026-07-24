@@ -4,7 +4,7 @@ import { ChevronDown, Loader2, Eye, EyeOff, Droplets, Camera, X } from 'lucide-r
 
 export function Sidebar({ collapsed, onClose }: { collapsed: boolean, onClose?: () => void }) {
   const { 
-    status, filename, meshes, globalOpacity, setGlobalOpacity, 
+    status, loadingProgress, filename, meshes, globalOpacity, setGlobalOpacity, 
     toggleMeshVisibility, setMeshOpacity, highlightMesh, highlightedMeshId,
     isClipping, setIsClipping, clipPlanes, updateClipPlane,
     explodeValue, setExplodeValue, isEmpty, isAutoRotating, setIsAutoRotating,
@@ -46,9 +46,17 @@ export function Sidebar({ collapsed, onClose }: { collapsed: boolean, onClose?: 
               </div>
               <div className="text-slate-700 dark:text-slate-300">
                 {status.includes('Loading') || status.includes('Parsing') ? (
-                  <div className="flex flex-col items-center justify-center text-blue-600 dark:text-blue-500">
+                  <div className="flex flex-col items-center justify-center text-blue-600 dark:text-blue-500 w-full mt-2">
                     <Loader2 className="animate-spin mb-2" size={24} />
                     <span className="text-slate-800 dark:text-slate-200 whitespace-pre-line text-xs font-semibold">{status.replace(/\*\*/g, '')}</span>
+                    {loadingProgress > 0 && loadingProgress < 100 && (
+                      <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 mt-3 overflow-hidden">
+                        <div 
+                          className="bg-blue-600 dark:bg-blue-500 h-1.5 rounded-full transition-all duration-300 ease-out" 
+                          style={{ width: `${loadingProgress}%` }}
+                        ></div>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <span className="whitespace-pre-line text-sm" dangerouslySetInnerHTML={{ __html: status.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>') }} />

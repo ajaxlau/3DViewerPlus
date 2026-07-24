@@ -7,6 +7,7 @@ declare global {
 
 export interface ViewerManagerConfig {
   onStatusChange: (status: string, isEmpty: boolean, filename?: string, url?: string | null) => void;
+  onProgressChange?: (progress: number) => void;
   onMeshesChange: (meshes: { id: number, name: string, visible: boolean, opacity: number }[]) => void;
   onMeshHighlighted: (id: number | null) => void;
   onPlanningObjectsChange?: (objects: any[]) => void;
@@ -53,6 +54,14 @@ export class ViewerManager {
   rulerAnimationFrame: any = null;
   lastPlanesState: any = null;
   lastCameraState: string = '';
+
+  // Rotation Visual Cue state
+  isRotatingTool: boolean = false;
+  rotationCueGroup: any = null;
+  rotationBadgeDiv: HTMLDivElement | null = null;
+  rotationStartQuat: any = null;
+  rotationStartPos: any = null;
+  rotationAxisName: string | null = null;
 
   // Memory Leak Prevention & Disposal tracking
   isDisposed: boolean = false;
@@ -284,6 +293,9 @@ export class ViewerManager {
             v.Render(); 
         } catch(e){}
         broadcastTransformChange();
+        if (this.isRotatingTool) {
+            this.updateRotationVisualCue();
+        }
         if (this.config.onPlanningObjectsChange) {
             this.config.onPlanningObjectsChange([...this.planningObjects]);
         }
@@ -292,7 +304,12 @@ export class ViewerManager {
        if (v.navigation) {
            v.navigation.isTransforming = event.value;
        }
-       if (!event.value) {
+       if (event.value) {
+           if (this.transformControl && this.transformControl.mode === 'rotate' && this.transformControl.object) {
+               this.startRotationVisualCue();
+           }
+       } else {
+           this.clearRotationVisualCue();
            broadcastTransformChange();
            if (this.config.onPlanningObjectsChange) {
                this.config.onPlanningObjectsChange([...this.planningObjects]);
@@ -497,6 +514,7 @@ export class ViewerManager {
     }
     
     // 6.5 Dispose TransformControls properly
+    this.clearRotationVisualCue();
     if (this.transformControl) {
         if (this.viewer && this.viewer.viewer) {
             const v = this.viewer.viewer;
@@ -786,8 +804,19 @@ export class ViewerManager {
     let lastMeshCount = -1;
     let stableCount = 0;
     
+    // reset progress
+    let simProgress = 5;
+    if (this.config.onProgressChange) this.config.onProgressChange(simProgress);
+
     this.treeParseInterval = setInterval(() => {
       attempts++;
+      
+      // simulate progress mapping to exactly 95% over 10 seconds (~20 attempts)
+      if (simProgress < 95) {
+          simProgress += Math.max(1, (95 - simProgress) * 0.1);
+          if (this.config.onProgressChange) this.config.onProgressChange(Math.round(simProgress));
+      }
+
       try {
         const scene = this.viewer && this.viewer.viewer ? (this.viewer.viewer.scene || this.viewer.viewer.mainScene) : null;
         let currentMeshCount = 0;
@@ -806,6 +835,8 @@ export class ViewerManager {
           stableCount++;
           if (stableCount >= 2 || attempts >= 120) {
             clearInterval(this.treeParseInterval);
+            
+            if (this.config.onProgressChange) this.config.onProgressChange(100);
 
             this.buildModelTree();
             this.setupExplosion();
@@ -854,11 +885,13 @@ export class ViewerManager {
           stableCount = 0;
         } else if (attempts >= 120) {
           clearInterval(this.treeParseInterval);
+          if (this.config.onProgressChange) this.config.onProgressChange(100);
           this.config.onStatusChange(`Loading finished.\n**${filename}**`, false);
           this.config.onMeshesChange([]);
         }
       } catch (err) {
         clearInterval(this.treeParseInterval);
+        if (this.config.onProgressChange) this.config.onProgressChange(100);
         this.config.onStatusChange(`Error parsing model.`, false);
       }
     }, 500);
@@ -1111,6 +1144,7 @@ export class ViewerManager {
   }
 
   setTransformMode(mode: 'translate' | 'rotate' | 'scale') {
+    this.clearRotationVisualCue();
     if (this.transformControl) {
       this.transformControl.setMode(mode);
       this.transformControl.setSpace('local');
@@ -1154,6 +1188,302 @@ export class ViewerManager {
       if (this.viewer && this.viewer.viewer) {
           this.viewer.viewer.Render();
       }
+  }
+
+  // --- ROTATION VISUAL CUE PIPELINE ---
+
+  startRotationVisualCue() {
+    if (!this.transformControl || !this.transformControl.object || !window.THREE) return;
+    const mesh = this.transformControl.object;
+    
+    // Find associated planning object (e.g. plane or cylinder)
+    const planObj = this.planningObjects.find(o => o.mesh === mesh);
+    if (!planObj || (planObj.type !== 'plane' && planObj.type !== 'cylinder')) {
+      return;
+    }
+
+    this.isRotatingTool = true;
+    this.rotationStartQuat = mesh.quaternion.clone();
+    this.rotationStartPos = mesh.position.clone();
+    
+    // Extract axis being rotated ('X', 'Y', 'Z', 'E', etc.)
+    const rawAxis = (this.transformControl.axis || 'Z').toUpperCase();
+    this.rotationAxisName = rawAxis;
+
+    const v = this.viewer?.viewer;
+    const scene = v?.scene || v?.mainScene;
+    if (!scene) return;
+
+    // Create container group for 3D overlay arc & rays
+    if (!this.rotationCueGroup) {
+      this.rotationCueGroup = new window.THREE.Group();
+      this.rotationCueGroup.userData = { isCustomOverlay: true };
+      scene.add(this.rotationCueGroup);
+    }
+
+    // Create 2D DOM badge label if not present
+    if (!this.rotationBadgeDiv) {
+      const div = document.createElement('div');
+      div.className = 'absolute z-50 pointer-events-none font-mono text-xs font-bold text-white bg-slate-900/90 border rounded-full px-3 py-1.5 shadow-2xl backdrop-blur-md flex items-center gap-2 transition-opacity whitespace-nowrap tracking-tight select-none';
+      div.style.transform = 'translate(-50%, -100%)';
+      div.style.opacity = '0';
+      this.container.appendChild(div);
+      this.rotationBadgeDiv = div;
+    }
+
+    this.updateRotationVisualCue();
+  }
+
+  updateRotationVisualCue() {
+    if (!this.isRotatingTool || !this.transformControl || !this.transformControl.object || !window.THREE) return;
+    const THREE = window.THREE;
+    const mesh = this.transformControl.object;
+    const planObj = this.planningObjects.find(o => o.mesh === mesh);
+
+    if (!planObj) return;
+
+    const currentQuat = mesh.quaternion.clone();
+    const startQuat = this.rotationStartQuat || currentQuat.clone();
+
+    // Compute relative rotation delta quat = Q_current * Q_start^(-1)
+    const deltaQuat = currentQuat.clone().multiply(startQuat.clone().invert());
+    if (deltaQuat.w < 0) {
+      deltaQuat.x = -deltaQuat.x;
+      deltaQuat.y = -deltaQuat.y;
+      deltaQuat.z = -deltaQuat.z;
+      deltaQuat.w = -deltaQuat.w;
+    }
+
+    const axisName = (this.rotationAxisName || 'Z').toUpperCase();
+
+    // Define local axis and default axis color
+    let localAxis = new THREE.Vector3(0, 0, 1);
+    let axisColorHex = 0x3b82f6; // Blue (Z)
+    let axisColorCss = '#3b82f6';
+    let borderColorCss = 'border-blue-500';
+
+    if (axisName.includes('X')) {
+      localAxis.set(1, 0, 0);
+      axisColorHex = 0xef4444; // Red (X)
+      axisColorCss = '#ef4444';
+      borderColorCss = 'border-red-500';
+    } else if (axisName.includes('Y')) {
+      localAxis.set(0, 1, 0);
+      axisColorHex = 0x22c55e; // Green (Y)
+      axisColorCss = '#22c55e';
+      borderColorCss = 'border-emerald-500';
+    } else if (axisName.includes('E')) {
+      // Camera view rotation
+      if (this.viewer?.viewer?.camera) {
+        this.viewer.viewer.camera.getWorldDirection(localAxis);
+        localAxis.negate();
+      }
+      axisColorHex = 0xf59e0b; // Amber
+      axisColorCss = '#f59e0b';
+      borderColorCss = 'border-amber-500';
+    }
+
+    // World axis vector
+    const worldAxis = localAxis.clone().applyQuaternion(startQuat).normalize();
+
+    // Calculate signed angle around worldAxis
+    const vecPart = new THREE.Vector3(deltaQuat.x, deltaQuat.y, deltaQuat.z);
+    const dotWorld = vecPart.dot(worldAxis);
+    const sign = dotWorld >= 0 ? 1 : -1;
+    let angleRad = 2 * Math.atan2(sign * vecPart.length(), deltaQuat.w);
+    if (sign < 0) {
+      angleRad = -Math.abs(angleRad);
+    }
+    const angleDeg = angleRad * (180 / Math.PI);
+
+    // --- Update 2D Floating DOM Badge ---
+    if (this.rotationBadgeDiv) {
+      const objLabel = planObj.name ? `${planObj.name} • ` : '';
+      const formattedAngle = `${angleDeg >= 0 ? '+' : ''}${angleDeg.toFixed(1)}°`;
+      
+      this.rotationBadgeDiv.className = `absolute z-50 pointer-events-none font-mono text-xs font-bold text-white bg-slate-900/90 border ${borderColorCss} rounded-full px-3 py-1.5 shadow-2xl backdrop-blur-md flex items-center gap-2 transition-opacity whitespace-nowrap tracking-tight select-none`;
+      this.rotationBadgeDiv.innerHTML = `
+        <span class="w-2.5 h-2.5 rounded-full animate-pulse" style="background-color: ${axisColorCss}"></span>
+        <span class="text-slate-300 font-semibold uppercase text-[10px] tracking-wider">${objLabel}${axisName}-ROTATION:</span>
+        <span class="text-amber-400 font-bold text-sm">${formattedAngle}</span>
+      `;
+
+      // Position badge in screen space near mesh position
+      const screenPos = this.projectToScreen(mesh.position);
+      if (screenPos && screenPos.z < 1) {
+        this.rotationBadgeDiv.style.left = `${screenPos.x}px`;
+        this.rotationBadgeDiv.style.top = `${screenPos.y - 40}px`;
+        this.rotationBadgeDiv.style.opacity = '1';
+      } else {
+        this.rotationBadgeDiv.style.opacity = '0';
+      }
+    }
+
+    // --- Update 3D Overlay Group (Arc & Sector Geometry) ---
+    if (this.rotationCueGroup && this.viewer?.viewer) {
+      // Clear previous 3D children in cue group
+      while (this.rotationCueGroup.children.length > 0) {
+        const child = this.rotationCueGroup.children[0];
+        this.rotationCueGroup.remove(child);
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) {
+          if (Array.isArray(child.material)) {
+            child.material.forEach((m: any) => m.dispose());
+          } else {
+            child.material.dispose();
+          }
+        }
+      }
+
+      this.rotationCueGroup.position.copy(mesh.position);
+
+      // Determine visual arc radius R based on tool dimensions
+      let R = 25;
+      if (planObj.type === 'plane') {
+        R = Math.max(planObj.width || 30, planObj.height || 30) * 0.6;
+      } else if (planObj.type === 'cylinder') {
+        R = Math.max(planObj.length || 30, (planObj.diameter || 2) * 10) * 0.45;
+      }
+
+      // Compute orthonormal vectors u and v perpendicular to worldAxis
+      let u = new THREE.Vector3();
+      if (Math.abs(worldAxis.x) < 0.9) {
+        u.set(0, -worldAxis.z, worldAxis.y).normalize();
+      } else {
+        u.set(-worldAxis.y, worldAxis.x, 0).normalize();
+      }
+      const v = new THREE.Vector3().crossVectors(worldAxis, u).normalize();
+
+      // Create Sector Arc Fan Geometry
+      const absDeg = Math.abs(angleDeg);
+      const numSegments = Math.max(12, Math.ceil(absDeg / 4));
+      
+      const positions: number[] = [0, 0, 0]; // Center point at (0,0,0)
+      const arcPoints: any[] = [];
+
+      for (let i = 0; i <= numSegments; i++) {
+        const t = angleRad * (i / numSegments);
+        const p = u.clone().multiplyScalar(Math.cos(t)).add(v.clone().multiplyScalar(Math.sin(t)));
+        const pt = p.multiplyScalar(R);
+        positions.push(pt.x, pt.y, pt.z);
+        arcPoints.push(pt);
+      }
+
+      const indices: number[] = [];
+      for (let i = 1; i <= numSegments; i++) {
+        if (angleRad >= 0) {
+          indices.push(0, i, i + 1);
+        } else {
+          indices.push(0, i + 1, i);
+        }
+      }
+
+      const fanGeom = new THREE.BufferGeometry();
+      fanGeom.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      fanGeom.setIndex(indices);
+
+      const fanMat = new THREE.MeshBasicMaterial({
+        color: axisColorHex,
+        side: THREE.DoubleSide,
+        transparent: true,
+        opacity: 0.3,
+        depthTest: false
+      });
+      const fanMesh = new THREE.Mesh(fanGeom, fanMat);
+      fanMesh.renderOrder = 9999;
+      this.rotationCueGroup.add(fanMesh);
+
+      // Baseline Ray Line (0 deg)
+      const baseRayGeom = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, 0, 0),
+        u.clone().multiplyScalar(R * 1.15)
+      ]);
+      const baseRayMat = new THREE.LineBasicMaterial({
+        color: axisColorHex,
+        linewidth: 3,
+        depthTest: false
+      });
+      const baseRay = new THREE.Line(baseRayGeom, baseRayMat);
+      baseRay.renderOrder = 9999;
+      this.rotationCueGroup.add(baseRay);
+
+      // Rotated Ray Line (Current Angle)
+      const rotRayGeom = new THREE.BufferGeometry().setFromPoints([
+        new THREE.Vector3(0, 0, 0),
+        arcPoints[arcPoints.length - 1].clone().multiplyScalar(1.15)
+      ]);
+      const rotRayMat = new THREE.LineBasicMaterial({
+        color: 0xf59e0b, // Amber active pointer line
+        linewidth: 3,
+        depthTest: false
+      });
+      const rotRay = new THREE.Line(rotRayGeom, rotRayMat);
+      rotRay.renderOrder = 9999;
+      this.rotationCueGroup.add(rotRay);
+
+      // Arc Outer Edge Line
+      const arcEdgeGeom = new THREE.BufferGeometry().setFromPoints(arcPoints);
+      const arcEdgeMat = new THREE.LineBasicMaterial({
+        color: axisColorHex,
+        linewidth: 3,
+        depthTest: false
+      });
+      const arcEdgeLine = new THREE.Line(arcEdgeGeom, arcEdgeMat);
+      arcEdgeLine.renderOrder = 9999;
+      this.rotationCueGroup.add(arcEdgeLine);
+
+      // Center Origin Marker Sphere
+      const centerGeom = new THREE.SphereGeometry(R * 0.04, 16, 16);
+      const centerMat = new THREE.MeshBasicMaterial({
+        color: 0xffffff,
+        depthTest: false
+      });
+      const centerMesh = new THREE.Mesh(centerGeom, centerMat);
+      centerMesh.renderOrder = 9999;
+      this.rotationCueGroup.add(centerMesh);
+
+      try {
+        this.viewer.viewer.Render();
+      } catch (e) {}
+    }
+  }
+
+  clearRotationVisualCue() {
+    this.isRotatingTool = false;
+    this.rotationStartQuat = null;
+    this.rotationStartPos = null;
+    this.rotationAxisName = null;
+
+    if (this.rotationCueGroup && this.viewer?.viewer) {
+      const scene = this.viewer.viewer.scene || this.viewer.viewer.mainScene;
+      if (scene) {
+        scene.remove(this.rotationCueGroup);
+        this.rotationCueGroup.traverse((child: any) => {
+          if (child.geometry) child.geometry.dispose();
+          if (child.material) {
+            if (Array.isArray(child.material)) {
+              child.material.forEach((m: any) => m.dispose());
+            } else {
+              child.material.dispose();
+            }
+          }
+        });
+      }
+    }
+    this.rotationCueGroup = null;
+
+    if (this.rotationBadgeDiv) {
+      if (this.rotationBadgeDiv.parentElement) {
+        this.rotationBadgeDiv.parentElement.removeChild(this.rotationBadgeDiv);
+      }
+      this.rotationBadgeDiv = null;
+    }
+
+    if (this.viewer?.viewer) {
+      try {
+        this.viewer.viewer.Render();
+      } catch (e) {}
+    }
   }
 
   addPlanningPoint(point: any, normal?: any) {
@@ -3894,6 +4224,10 @@ It contains both Slicer markup properties and the application's internal groupin
                         }
                     }
                 });
+            }
+
+            if (this.isRotatingTool) {
+                this.updateRotationVisualCue();
             }
 
             if (this.rulersVisible) {
