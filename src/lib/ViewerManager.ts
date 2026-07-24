@@ -1225,7 +1225,9 @@ export class ViewerManager {
     if (!this.rotationBadgeDiv) {
       const div = document.createElement('div');
       div.className = 'absolute z-50 pointer-events-none font-mono text-xs font-bold text-white bg-slate-900/90 border rounded-full px-3 py-1.5 shadow-2xl backdrop-blur-md flex items-center gap-2 transition-opacity whitespace-nowrap tracking-tight select-none';
-      div.style.transform = 'translate(-50%, -100%)';
+      div.style.left = '50%';
+      div.style.top = '24px';
+      div.style.transform = 'translateX(-50%)';
       div.style.opacity = '0';
       this.container.appendChild(div);
       this.rotationBadgeDiv = div;
@@ -1308,15 +1310,11 @@ export class ViewerManager {
         <span class="text-amber-400 font-bold text-sm">${formattedAngle}</span>
       `;
 
-      // Position badge in screen space near mesh position
-      const screenPos = this.projectToScreen(mesh.position);
-      if (screenPos && screenPos.z < 1) {
-        this.rotationBadgeDiv.style.left = `${screenPos.x}px`;
-        this.rotationBadgeDiv.style.top = `${screenPos.y - 40}px`;
-        this.rotationBadgeDiv.style.opacity = '1';
-      } else {
-        this.rotationBadgeDiv.style.opacity = '0';
-      }
+      // Position badge in the middle top of the canvas
+      this.rotationBadgeDiv.style.left = '50%';
+      this.rotationBadgeDiv.style.top = '24px';
+      this.rotationBadgeDiv.style.transform = 'translateX(-50%)';
+      this.rotationBadgeDiv.style.opacity = '1';
     }
 
     // --- Update 3D Overlay Group (Arc & Sector Geometry) ---
