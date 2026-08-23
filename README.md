@@ -91,4 +91,10 @@ This software is developed as an interactive visualization and research planning
 
 ---
 
+## 📄 License
+
+This project is licensed under the open-source **MIT License** with an Educational & Research Use Notice — see the [LICENSE](LICENSE) file for details.
+
+---
+
 *Developed for NTEC 3D Printing Office (3DPO) — Advancing Personalized Medicine through 3D Innovation.*
