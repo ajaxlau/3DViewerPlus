@@ -259,25 +259,25 @@ export function Modals() {
   if (!activeModal || activeModal === 'planning') return null;
 
   return (
-    <div className="fixed inset-0 bg-slate-900/60 z-[1000] flex items-center justify-center fade-in p-4">
-      <div className="bg-white dark:bg-slate-900 p-8 rounded-sm shadow-xl outline-none border border-slate-200 dark:border-slate-800" 
+    <div className="fixed inset-0 bg-zinc-900/60 z-[1000] flex items-center justify-center fade-in p-4">
+      <div className="bg-white dark:bg-zinc-900 p-8 rounded-sm shadow-xl outline-none border border-zinc-200 dark:border-zinc-800" 
            style={{ width: activeModal === 'snapshot' ? '750px' : '450px', maxWidth: '100%' }}>
         
         {/* -- URL MODAL -- */}
         {activeModal === 'url' && (
           <>
-            <h3 className="text-[11px] uppercase tracking-widest font-bold mb-3 text-slate-800 dark:text-slate-200">Load from URL</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-5 font-mono">Input the URL of a 3D model (CORS Support Required):</p>
+            <h3 className="text-[11px] uppercase tracking-widest font-bold mb-3 text-zinc-800 dark:text-zinc-200">Load from URL</h3>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-5 font-mono">Input the URL of a 3D model (CORS Support Required):</p>
             <input 
               type="text" 
               value={urlInput}
               onChange={(e) => setUrlInput(e.target.value)}
-              className="w-full p-3 mb-6 border border-slate-300 dark:border-slate-700 rounded-sm bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 outline-none focus:border-blue-500 font-mono text-sm" 
+              className="w-full p-3 mb-6 border border-zinc-300 dark:border-zinc-700 rounded-sm bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 outline-none focus:border-blue-500 font-mono text-sm" 
               placeholder="https://raw.githubusercontent.com/.../model.gltf"
               onKeyDown={(e) => e.key === 'Enter' && handleLoadUrl()}
             />
             <div className="flex justify-end gap-3">
-              <button className="px-5 py-2.5 rounded-sm text-xs font-bold uppercase tracking-widest border border-slate-300 dark:border-slate-700 bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800" onClick={() => setActiveModal(null)}>Cancel</button>
+              <button className="px-5 py-2.5 rounded-sm text-xs font-bold uppercase tracking-widest border border-zinc-300 dark:border-zinc-700 bg-transparent text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800" onClick={() => setActiveModal(null)}>Cancel</button>
               <button className="px-5 py-2.5 rounded-sm text-xs font-bold uppercase tracking-widest bg-blue-600 text-white hover:bg-blue-700 border-none" onClick={handleLoadUrl}>Load</button>
             </div>
           </>
@@ -286,26 +286,26 @@ export function Modals() {
         {/* -- SHARE MODAL -- */}
         {activeModal === 'share' && (
            <>
-            <h3 className="text-[11px] uppercase tracking-widest font-bold mb-3 text-slate-800 dark:text-slate-200">Share Model</h3>
+            <h3 className="text-[11px] uppercase tracking-widest font-bold mb-3 text-zinc-800 dark:text-zinc-200">Share Model</h3>
             {!loadedUrl ? (
                 <p className="text-sm text-red-500 mb-5 font-mono">Please load a model from a URL first before sharing. Local files cannot be shared via link.</p>
             ) : (
                 <>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mb-5 font-mono">
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-5 font-mono">
                   {isSandbox && <><strong className="text-red-500">Preview Mode:</strong> You are in a temporary sandbox. Once deployed, it will look like this:<br/><br/></>}
                   Scan the QR code or copy the link below to share this model:
                 </p>
                 <div className="flex flex-col gap-4 mb-6">
-                  <div className="bg-white p-4 rounded-md border border-slate-200 dark:border-slate-800 mx-auto">
+                  <div className="bg-white p-4 rounded-md border border-zinc-200 dark:border-zinc-800 mx-auto">
                     <QRCodeSVG value={shareVal} size={160} level={"H"} />
                   </div>
-                  <input readOnly value={shareVal} className="w-full p-3 border border-slate-300 dark:border-slate-700 rounded-sm bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-mono text-sm outline-none" />
+                  <input readOnly value={shareVal} className="w-full p-3 border border-zinc-300 dark:border-zinc-700 rounded-sm bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 font-mono text-sm outline-none" />
                 </div>
                 </>
             )}
             <div className="flex justify-end items-center gap-3 mt-6 w-full">
               <button 
-                className="flex-1 max-w-[120px] h-10 px-3 rounded-sm text-xs font-bold uppercase tracking-widest border border-slate-300 dark:border-slate-700 bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center justify-center text-center font-bold" 
+                className="flex-1 max-w-[120px] h-10 px-3 rounded-sm text-xs font-bold uppercase tracking-widest border border-zinc-300 dark:border-zinc-700 bg-transparent text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors flex items-center justify-center text-center font-bold" 
                 onClick={() => setActiveModal(null)}
               >
                 Close
@@ -363,23 +363,23 @@ export function Modals() {
         {/* -- SNAPSHOT MODAL -- */}
         {activeModal === 'snapshot' && (
           <>
-            <h3 className="text-[11px] uppercase tracking-widest font-bold mb-3 text-slate-800 dark:text-slate-200">Create Snapshot</h3>
+            <h3 className="text-[11px] uppercase tracking-widest font-bold mb-3 text-zinc-800 dark:text-zinc-200">Create Snapshot</h3>
             {isEmpty ? (
               <p className="text-sm text-red-500 mb-5 font-mono">Please load a model first.</p>
             ) : (
               <div className="flex flex-wrap gap-6 mt-5 mb-7">
                 {snap360 ? (
-                  <div className="flex-1 min-w-[300px] bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-sm h-[320px] shadow-inner p-4 flex flex-col justify-center items-center overflow-y-auto">
+                  <div className="flex-1 min-w-[300px] bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-sm h-[320px] shadow-inner p-4 flex flex-col justify-center items-center overflow-y-auto">
                     {isCapturing360 ? (
                       <div className="flex flex-col items-center gap-3 text-center py-6">
                         <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-                        <span className="text-sm font-medium text-slate-700 dark:text-slate-300">Capturing 360° Views...</span>
-                        <span className="text-xs text-slate-400 font-mono">Rotating 60° increments around model axis</span>
+                        <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Capturing 360° Views...</span>
+                        <span className="text-xs text-zinc-400 font-mono">Rotating 60° increments around model axis</span>
                       </div>
                     ) : captured360.length > 0 ? (
                       <div className="w-full h-full flex flex-col">
-                        <div className="flex items-center justify-between mb-3 border-b border-slate-200 dark:border-slate-800 pb-2">
-                          <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Captured Angles (In Memory)</span>
+                        <div className="flex items-center justify-between mb-3 border-b border-zinc-200 dark:border-zinc-800 pb-2">
+                          <span className="text-xs font-bold text-zinc-500 uppercase tracking-wider">Captured Angles (In Memory)</span>
                           <button 
                             type="button"
                             onClick={handleCapture360Sequence}
@@ -390,9 +390,9 @@ export function Modals() {
                         </div>
                         <div className="grid grid-cols-3 gap-2 overflow-y-auto flex-1 pr-1">
                           {captured360.map((snap) => (
-                            <div key={snap.angle} className="relative aspect-video bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-sm overflow-hidden group shadow-sm flex items-center justify-center">
+                            <div key={snap.angle} className="relative aspect-video bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-sm overflow-hidden group shadow-sm flex items-center justify-center">
                                <img src={snap.dataUrl} className="max-w-full max-h-full object-contain" alt={`${snap.angle}°`}/>
-                               <div className="absolute inset-x-0 bottom-0 bg-slate-950/80 text-[10px] text-white font-mono py-0.5 text-center transition-all group-hover:bg-blue-950/90 font-medium">
+                               <div className="absolute inset-x-0 bottom-0 bg-zinc-950/80 text-[10px] text-white font-mono py-0.5 text-center transition-all group-hover:bg-blue-950/90 font-medium">
                                  {snap.angle}° View
                                </div>
                             </div>
@@ -405,8 +405,8 @@ export function Modals() {
                           <svg viewBox="0 0 24 24" width="24" height="24" stroke="currentColor" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
                         </div>
                         <div className="max-w-[280px]">
-                          <h4 className="text-xs font-bold text-slate-800 dark:text-slate-200 uppercase tracking-widest mb-1">Orbit Snapshot Sequencing</h4>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">
+                          <h4 className="text-xs font-bold text-zinc-800 dark:text-zinc-200 uppercase tracking-widest mb-1">Orbit Snapshot Sequencing</h4>
+                          <p className="text-xs text-zinc-500 dark:text-zinc-400">
                             Captures 6 high-resolution pictures at 60-degree increments in browser memory.
                           </p>
                         </div>
@@ -421,39 +421,39 @@ export function Modals() {
                     )}
                   </div>
                 ) : (
-                  <div className="flex-1 min-w-[250px] bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-sm flex items-center justify-center overflow-hidden h-[320px] shadow-inner">
+                  <div className="flex-1 min-w-[250px] bg-zinc-100 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-sm flex items-center justify-center overflow-hidden h-[320px] shadow-inner">
                       {previewSrc ? (
                           <img src={previewSrc} className="max-w-[100%] max-h-[100%] object-contain" alt="Preview"/>
                       ) : null}
                   </div>
                 )}
-                <div className="w-[250px] flex flex-col gap-3 text-slate-700 dark:text-slate-300 text-sm justify-between">
+                <div className="w-[250px] flex flex-col gap-3 text-zinc-700 dark:text-zinc-300 text-sm justify-between">
                     <div className="flex flex-col gap-3">
                         <label className="flex items-center gap-3 cursor-pointer">
-                            <input type="radio" name="res" value="small" checked={snapRes === 'small'} onChange={() => setSnapRes('small')} className="accent-blue-600 w-4 h-4" /> Small <span className="font-mono text-xs text-slate-400 ml-auto">(1280x720)</span>
+                            <input type="radio" name="res" value="small" checked={snapRes === 'small'} onChange={() => setSnapRes('small')} className="accent-blue-600 w-4 h-4" /> Small <span className="font-mono text-xs text-zinc-400 ml-auto">(1280x720)</span>
                         </label>
                         <label className="flex items-center gap-3 cursor-pointer">
-                            <input type="radio" name="res" value="medium" checked={snapRes === 'medium'} onChange={() => setSnapRes('medium')} className="accent-blue-600 w-4 h-4" /> Medium <span className="font-mono text-xs text-slate-400 ml-auto">(1920x1080)</span>
+                            <input type="radio" name="res" value="medium" checked={snapRes === 'medium'} onChange={() => setSnapRes('medium')} className="accent-blue-600 w-4 h-4" /> Medium <span className="font-mono text-xs text-zinc-400 ml-auto">(1920x1080)</span>
                         </label>
                         <label className="flex items-center gap-3 cursor-pointer">
-                            <input type="radio" name="res" value="large" checked={snapRes === 'large'} onChange={() => setSnapRes('large')} className="accent-blue-600 w-4 h-4" /> Large <span className="font-mono text-xs text-slate-400 ml-auto">(2560x1440)</span>
+                            <input type="radio" name="res" value="large" checked={snapRes === 'large'} onChange={() => setSnapRes('large')} className="accent-blue-600 w-4 h-4" /> Large <span className="font-mono text-xs text-zinc-400 ml-auto">(2560x1440)</span>
                         </label>
                         <label className="flex items-center gap-3 cursor-pointer">
                             <input type="radio" name="res" value="custom" checked={snapRes === 'custom'} onChange={() => setSnapRes('custom')} className="accent-blue-600 w-4 h-4" /> Custom
                         </label>
                         
-                        <div className={`ml-7 pl-3 border-l-2 border-slate-200 dark:border-slate-700 flex flex-col gap-2 transition-opacity ${snapRes === 'custom' ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
-                            <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wide text-slate-500">
+                        <div className={`ml-7 pl-3 border-l-2 border-zinc-200 dark:border-zinc-700 flex flex-col gap-2 transition-opacity ${snapRes === 'custom' ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
+                            <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wide text-zinc-500">
                                 <span>Width</span>
-                                <input type="number" disabled={snapRes !== 'custom'} value={snapW} onChange={e => setSnapW(parseInt(e.target.value)||1)} className="w-20 p-1.5 border border-slate-300 dark:border-slate-700 rounded-sm bg-white dark:bg-slate-900 outline-none font-mono text-slate-800 dark:text-slate-200" />
+                                <input type="number" disabled={snapRes !== 'custom'} value={snapW} onChange={e => setSnapW(parseInt(e.target.value)||1)} className="w-20 p-1.5 border border-zinc-300 dark:border-zinc-700 rounded-sm bg-white dark:bg-zinc-900 outline-none font-mono text-zinc-800 dark:text-zinc-200" />
                             </div>
-                            <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wide text-slate-500">
+                            <div className="flex items-center justify-between text-xs font-bold uppercase tracking-wide text-zinc-500">
                                 <span>Height</span>
-                                <input type="number" disabled={snapRes !== 'custom'} value={snapH} onChange={e => setSnapH(parseInt(e.target.value)||1)} className="w-20 p-1.5 border border-slate-300 dark:border-slate-700 rounded-sm bg-white dark:bg-slate-900 outline-none font-mono text-slate-800 dark:text-slate-200" />
+                                <input type="number" disabled={snapRes !== 'custom'} value={snapH} onChange={e => setSnapH(parseInt(e.target.value)||1)} className="w-20 p-1.5 border border-zinc-300 dark:border-zinc-700 rounded-sm bg-white dark:bg-zinc-900 outline-none font-mono text-zinc-800 dark:text-zinc-200" />
                             </div>
                         </div>
                         
-                        <hr className="border-t border-slate-200 dark:border-slate-800 my-2"/>
+                        <hr className="border-t border-zinc-200 dark:border-zinc-800 my-2"/>
                         <label className="flex items-center gap-3 cursor-pointer">
                             <input type="checkbox" checked={snapTrans} onChange={(e) => setSnapTrans(e.target.checked)} className="accent-blue-600 w-4 h-4" /> Transparent background
                         </label>
@@ -473,10 +473,10 @@ export function Modals() {
                 </div>
               </div>
             )}
-            <div className="flex justify-between items-center border-t border-slate-200 dark:border-slate-800 pt-5 mt-5">
+            <div className="flex justify-between items-center border-t border-zinc-200 dark:border-zinc-800 pt-5 mt-5">
               <button 
                 type="button"
-                className="h-10 px-5 rounded-sm text-xs font-bold uppercase tracking-widest border border-slate-300 dark:border-slate-700 bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors font-bold flex items-center justify-center animate" 
+                className="h-10 px-5 rounded-sm text-xs font-bold uppercase tracking-widest border border-zinc-300 dark:border-zinc-700 bg-transparent text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors font-bold flex items-center justify-center animate" 
                 onClick={() => setActiveModal(null)}
               >
                 Cancel
@@ -498,7 +498,7 @@ export function Modals() {
                           
                           <button 
                             type="button"
-                            className="h-10 px-4 rounded-sm text-xs font-bold uppercase tracking-widest border border-slate-300 dark:border-slate-700 bg-transparent text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors font-bold flex items-center justify-center" 
+                            className="h-10 px-4 rounded-sm text-xs font-bold uppercase tracking-widest border border-zinc-300 dark:border-zinc-700 bg-transparent text-zinc-600 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors font-bold flex items-center justify-center" 
                             onClick={handleDownloadAll360ZIP}
                           >
                             ZIP
@@ -516,7 +516,7 @@ export function Modals() {
                         <button 
                           type="button"
                           disabled
-                          className="h-10 px-6 rounded-sm text-xs font-bold uppercase tracking-widest bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed border-none flex items-center justify-center" 
+                          className="h-10 px-6 rounded-sm text-xs font-bold uppercase tracking-widest bg-zinc-200 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 cursor-not-allowed border-none flex items-center justify-center" 
                         >
                           Capture Sequence First
                         </button>

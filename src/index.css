@@ -5,7 +5,8 @@
 @theme {
   --color-primary: #2563EB;
   --color-primary-hover: #1D4ED8;
-  --font-sans: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --font-sans: "Plus Jakarta Sans", sans-serif;
+  --font-display: "Outfit", sans-serif;
   --font-mono: "Courier New", Courier, monospace;
 }
 

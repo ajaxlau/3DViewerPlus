@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useViewer } from '../context/ViewerContext';
-import { BoxSelect, Camera, Move, RotateCw, Scaling, Info, Plus } from 'lucide-react';
+import { BoxSelect, Camera, Move, RotateCw, Scaling, Info, Plus, Maximize } from 'lucide-react';
 
 export function ViewerCanvas() {
   const { 
@@ -114,7 +114,7 @@ export function ViewerCanvas() {
   };
 
   return (
-    <main className="flex-1 w-full h-full relative bg-white dark:bg-slate-950 flex items-center justify-center overflow-hidden">
+    <main className="flex-1 w-full h-full relative bg-white dark:bg-zinc-950 flex items-center justify-center overflow-hidden">
       {/* Background Image Reference */}
       {backgroundImage && (
         <img 
@@ -133,18 +133,18 @@ export function ViewerCanvas() {
       />
       
       {/* Transform Floating Buttons */}
-      {isTransformActive && activeTransformObjectId && ['plane', 'cylinder'].includes(planningObjects.find(o => o.id === activeTransformObjectId)?.type) && (
-        <div className="absolute top-6 right-6 z-20 flex bg-white/90 dark:bg-slate-800/90 backdrop-blur shadow-md rounded-md p-1 border border-slate-200 dark:border-slate-700">
+      {isTransformActive && activeTransformObjectId && ['plane', 'cylinder', 'custom_model'].includes(planningObjects.find(o => o.id === activeTransformObjectId)?.type || '') && (
+        <div className="absolute top-6 right-6 z-20 flex bg-white/90 dark:bg-zinc-800/90 backdrop-blur shadow-md rounded-md p-1 border border-zinc-200 dark:border-zinc-700">
             <button
-              onClick={() => viewerManager?.setTransformMode('translate')}
-              className={`p-2 rounded ${transformMode === 'translate' ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50'} transition-colors`}
-              title="Translate"
+              onClick={() => viewerManager?.setTransformMode('tranzinc')}
+              className={`p-2 rounded ${transformMode === 'tranzinc' ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400' : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700/50'} transition-colors`}
+              title="Tranzinc"
             >
               <Move size={18} />
             </button>
             <button
               onClick={() => viewerManager?.setTransformMode('rotate')}
-              className={`p-2 rounded ${transformMode === 'rotate' ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400' : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/50'} transition-colors`}
+              className={`p-2 rounded ${transformMode === 'rotate' ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400' : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700/50'} transition-colors`}
               title="Rotate"
             >
               <RotateCw size={18} />
@@ -157,17 +157,17 @@ export function ViewerCanvas() {
         <div ref={menuRef} className="absolute bottom-6 left-6 z-20 flex flex-col-reverse items-center gap-3">
           <button
             onClick={() => setShowQuickMenu(!showQuickMenu)}
-            className={`w-12 h-12 rounded-full flex items-center justify-center transition-all focus:outline-none shadow-[0_4px_14px_0_rgba(59,130,246,0.39)] hover:shadow-[0_6px_20px_rgba(59,130,246,0.23)] hover:-translate-y-0.5 active:translate-y-0 active:scale-95 z-30
-              ${showQuickMenu ? 'bg-slate-800 text-white dark:bg-white dark:text-slate-900 rotate-45' : 'bg-gradient-to-tr from-blue-600 to-indigo-500 hover:from-blue-500 hover:to-indigo-400 text-white'}`}
+            className={`w-12 h-12 rounded-full flex items-center justify-center transition-all focus:outline-none shadow-[0_4px_14px_0_rgba(59,130,246,0.39)] hover:shadow-[0_6px_20px_rgba(59,130,246,0.23)] hover:-tranzinc-y-0.5 active:tranzinc-y-0 active:scale-95 z-30
+              ${showQuickMenu ? 'bg-zinc-800 text-white dark:bg-white dark:text-zinc-900 rotate-45' : 'bg-gradient-to-tr from-blue-600 to-indigo-500 hover:from-blue-500 hover:to-indigo-400 text-white'}`}
             title="Quick Menu"
           >
             <Plus size={24} className="transition-transform duration-300" />
           </button>
           
-          <div className={`flex flex-col gap-3 transition-all duration-300 origin-bottom ${showQuickMenu ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto' : 'opacity-0 scale-95 translate-y-4 pointer-events-none'}`}>
+          <div className={`flex flex-col gap-3 transition-all duration-300 origin-bottom ${showQuickMenu ? 'opacity-100 scale-100 tranzinc-y-0 pointer-events-auto' : 'opacity-0 scale-95 tranzinc-y-4 pointer-events-none'}`}>
             <button
               onClick={handleQuickSnapshotShare}
-              className="w-10 h-10 rounded-full bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 flex items-center justify-center shadow-lg transition-all hover:bg-slate-50 dark:hover:bg-slate-700 hover:-translate-y-0.5 active:translate-y-0 active:scale-95 focus:outline-none border border-slate-200 dark:border-slate-700"
+              className="w-10 h-10 rounded-full bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 flex items-center justify-center shadow-lg transition-all hover:bg-zinc-50 dark:hover:bg-zinc-700 hover:-tranzinc-y-0.5 active:tranzinc-y-0 active:scale-95 focus:outline-none border border-zinc-200 dark:border-zinc-700"
               title="Share Snapshot"
             >
               <Camera size={18} />
@@ -176,42 +176,42 @@ export function ViewerCanvas() {
             <div ref={infoRef} className="relative">
               <button
                 onClick={(e) => { e.stopPropagation(); setShowInfo(!showInfo); }}
-                className={`w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-all hover:-translate-y-0.5 active:translate-y-0 active:scale-95 focus:outline-none border
-                  ${showInfo ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800/50' : 'bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700'}`}
+                className={`w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-all hover:-tranzinc-y-0.5 active:tranzinc-y-0 active:scale-95 focus:outline-none border
+                  ${showInfo ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800/50' : 'bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700'}`}
                 title="Shortcuts Info"
               >
                 <Info size={18} />
               </button>
               
               {showInfo && (
-                <div className="absolute bottom-[-10px] left-14 z-20 bg-white/80 dark:bg-slate-900/80 backdrop-blur-md rounded-xl p-5 border border-slate-200/50 dark:border-slate-700/50 shadow-xl w-80 pointer-events-auto origin-bottom-left animate-in fade-in zoom-in-95 duration-200">
-                  <h3 className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-3 uppercase tracking-wider">Controls & Shortcuts</h3>
-                  <ul className="text-xs text-slate-600 dark:text-slate-400 space-y-3">
-                    <li className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2">
+                <div className="absolute bottom-[-10px] left-14 z-20 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-md rounded-xl p-5 border border-zinc-200/50 dark:border-zinc-700/50 shadow-xl w-80 pointer-events-auto origin-bottom-left animate-in fade-in zoom-in-95 duration-200">
+                  <h3 className="text-sm font-bold text-zinc-800 dark:text-zinc-200 mb-3 uppercase tracking-wider">Controls & Shortcuts</h3>
+                  <ul className="text-xs text-zinc-600 dark:text-zinc-400 space-y-3">
+                    <li className="flex justify-between items-center border-b border-zinc-100 dark:border-zinc-800 pb-2">
                       <span>Reset Camera</span>
-                      <kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-800 rounded font-mono text-[10px] shadow-sm font-bold text-slate-700 dark:text-slate-300">R</kbd>
+                      <kbd className="px-2 py-1 bg-zinc-200 dark:bg-zinc-800 rounded font-mono text-[10px] shadow-sm font-bold text-zinc-700 dark:text-zinc-300">R</kbd>
                     </li>
-                    <li className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2">
+                    <li className="flex justify-between items-center border-b border-zinc-100 dark:border-zinc-800 pb-2">
                       <span>Switch Views (Front/Back/Left...)</span>
-                      <kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-800 rounded font-mono text-[10px] shadow-sm font-bold text-slate-700 dark:text-slate-300">1 - 6</kbd>
+                      <kbd className="px-2 py-1 bg-zinc-200 dark:bg-zinc-800 rounded font-mono text-[10px] shadow-sm font-bold text-zinc-700 dark:text-zinc-300">1 - 6</kbd>
                     </li>
-                    <li className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2">
+                    <li className="flex justify-between items-center border-b border-zinc-100 dark:border-zinc-800 pb-2">
                       <span>Rotate</span>
-                      <kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-800 rounded font-mono text-[10px] shadow-sm font-bold text-slate-700 dark:text-slate-300">Left Click & Drag</kbd>
+                      <kbd className="px-2 py-1 bg-zinc-200 dark:bg-zinc-800 rounded font-mono text-[10px] shadow-sm font-bold text-zinc-700 dark:text-zinc-300">Left Click & Drag</kbd>
                     </li>
-                    <li className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2">
+                    <li className="flex justify-between items-center border-b border-zinc-100 dark:border-zinc-800 pb-2">
                       <span>Pan</span>
-                      <kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-800 rounded font-mono text-[10px] shadow-sm font-bold text-slate-700 dark:text-slate-300">Middle Click & Drag</kbd>
+                      <kbd className="px-2 py-1 bg-zinc-200 dark:bg-zinc-800 rounded font-mono text-[10px] shadow-sm font-bold text-zinc-700 dark:text-zinc-300">Middle Click & Drag</kbd>
                     </li>
-                    <li className="flex justify-between items-center border-b border-slate-100 dark:border-slate-800 pb-2">
+                    <li className="flex justify-between items-center border-b border-zinc-100 dark:border-zinc-800 pb-2">
                       <span>Zoom In / Out</span>
                       <div className="flex gap-1">
-                          <kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-800 rounded font-mono text-[10px] shadow-sm font-bold text-slate-700 dark:text-slate-300">Scroll</kbd>
+                          <kbd className="px-2 py-1 bg-zinc-200 dark:bg-zinc-800 rounded font-mono text-[10px] shadow-sm font-bold text-zinc-700 dark:text-zinc-300">Scroll</kbd>
                       </div>
                     </li>
                     <li className="flex justify-between items-center pt-1">
                       <span>Smooth Zoom</span>
-                      <kbd className="px-2 py-1 bg-slate-200 dark:bg-slate-800 rounded font-mono text-[10px] shadow-sm font-bold text-slate-700 dark:text-slate-300">Ctrl + Left Click & Drag</kbd>
+                      <kbd className="px-2 py-1 bg-zinc-200 dark:bg-zinc-800 rounded font-mono text-[10px] shadow-sm font-bold text-zinc-700 dark:text-zinc-300">Ctrl + Left Click & Drag</kbd>
                     </li>
                   </ul>
                 </div>
@@ -231,7 +231,7 @@ export function ViewerCanvas() {
       
       {/* Rulers Overlay Layer */}
       <div className={`absolute inset-0 z-10 pointer-events-none transition-opacity duration-300 ${rulersVisible ? 'opacity-100' : 'opacity-0'}`}>
-        <div className="absolute top-0 left-0 w-6 h-6 bg-slate-50 dark:bg-slate-900 border-r border-b border-slate-200 dark:border-slate-800 flex items-center justify-center text-[9px] font-bold text-slate-500 z-20 box-border">
+        <div className="absolute top-0 left-0 w-6 h-6 bg-zinc-50 dark:bg-zinc-900 border-r border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-center text-[9px] font-bold text-zinc-500 z-20 box-border">
           mm
         </div>
         <canvas ref={(el) => { if(el) setTimeout(() => setRulerRefs(el), 0) }} id="ruler-top" className="absolute top-0 left-6 right-0 h-6 w-[calc(100%-24px)] z-10 block" />
@@ -240,10 +240,10 @@ export function ViewerCanvas() {
 
       {/* Empty State */}
       {isEmpty && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none z-15 bg-white dark:bg-slate-950">
-          <BoxSelect size={48} className="text-slate-300 dark:text-slate-700 mb-5" />
-          <h2 className="text-lg mb-2 text-slate-800 dark:text-slate-200 font-bold tracking-tight">DROP 3D MODELS TO BEGIN</h2>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mb-8 font-mono uppercase tracking-widest">Supports OBJ, STL, GLTF, GLB, PLY</p>
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none z-15 bg-white dark:bg-zinc-950">
+          <BoxSelect size={48} className="text-zinc-300 dark:text-zinc-700 mb-5" />
+          <h2 className="text-lg mb-2 text-zinc-800 dark:text-zinc-200 font-bold tracking-tight">DROP 3D MODELS TO BEGIN</h2>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400 mb-8 font-mono uppercase tracking-widest">Supports OBJ, STL, GLTF, GLB, PLY</p>
           <button 
             onClick={handleOpenFiles}
             className="pointer-events-auto bg-blue-600 hover:bg-blue-700 text-white border-none py-2.5 px-8 rounded-sm text-xs font-bold uppercase tracking-widest transition-colors shadow-sm"
@@ -266,7 +266,7 @@ export function ViewerCanvas() {
 function ScaleSliderRow({ label, value, min, max, step, onChange, isMm = false }: { label: string, value: number, min: number, max: number, step: number, onChange: (v: number) => void, isMm?: boolean }) {
     return (
         <div className="flex flex-col gap-1 my-1 pointer-events-auto">
-            <div className="flex justify-between items-center text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+            <div className="flex justify-between items-center text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
                 <span>{label}</span>
                 <span className="font-mono text-blue-600 dark:text-blue-400">
                     {isMm ? `${value?.toFixed(1) || '0.0'} mm` : `${((value || 0) * 100).toFixed(0)}%`}
@@ -277,14 +277,14 @@ function ScaleSliderRow({ label, value, min, max, step, onChange, isMm = false }
                 min={min} max={max} step={step}
                 value={value || 0} 
                 onChange={e => onChange(parseFloat(e.target.value))}
-                className="w-full h-1 bg-slate-200 dark:bg-slate-800 rounded-lg appearance-none cursor-pointer accent-blue-500 dark:accent-blue-400 focus:outline-none"
+                className="w-full h-1 bg-zinc-200 dark:bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-blue-500 dark:accent-blue-400 focus:outline-none"
             />
         </div>
     );
 }
 
 function ActiveObjectOverlaySettings({ obj, viewerManager }: { obj: any, viewerManager: any }) {
-    if (!obj || !viewerManager) return null;
+    if (!obj || !viewerManager || obj.type === 'custom_model') return null;
 
     const handlePlaneChange = (extSize?: number, thk?: number) => {
         const nextExt = extSize !== undefined ? extSize : (obj.extWidth || 0);
@@ -311,10 +311,10 @@ function ActiveObjectOverlaySettings({ obj, viewerManager }: { obj: any, viewerM
     const hasTools = obj.type === 'plane' || obj.type === 'cylinder';
 
     return (
-        <div className={`absolute top-6 left-6 z-20 flex flex-col bg-white/90 dark:bg-slate-800/90 backdrop-blur shadow-md rounded-md p-3 border border-slate-200 dark:border-slate-700 w-48 pointer-events-auto`}>
+        <div className={`absolute top-6 left-6 z-20 flex flex-col bg-white/90 dark:bg-zinc-800/90 backdrop-blur shadow-md rounded-md p-3 border border-zinc-200 dark:border-zinc-700 w-48 pointer-events-auto`}>
             {obj.type === 'plane' && (
                 <div className="flex flex-col gap-2">
-                    <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">{obj.name || "Plane"} Geometry</div>
+                    <div className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">{obj.name || "Plane"} Geometry</div>
                     <ScaleSliderRow 
                         label="Extension" 
                         value={obj.extWidth !== undefined ? obj.extWidth : 10} 
@@ -334,7 +334,7 @@ function ActiveObjectOverlaySettings({ obj, viewerManager }: { obj: any, viewerM
             
             {obj.type === 'cylinder' && (
                 <div className="flex flex-col gap-2">
-                    <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">{obj.name || "Cylinder"} Geometry</div>
+                    <div className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">{obj.name || "Cylinder"} Geometry</div>
                     <ScaleSliderRow 
                         label="Diameter" 
                         value={obj.diameter !== undefined ? obj.diameter : (obj.radius ? obj.radius * 2 : 1.0)} 
@@ -354,7 +354,7 @@ function ActiveObjectOverlaySettings({ obj, viewerManager }: { obj: any, viewerM
 
             {obj.type === 'curve' && (
                 <div className="flex flex-col gap-2">
-                    <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">{obj.name || "Curve"} Geometry</div>
+                    <div className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">{obj.name || "Curve"} Geometry</div>
                     <ScaleSliderRow 
                         label="Diameter" 
                         value={obj.thickness || 0.2} 
@@ -367,7 +367,7 @@ function ActiveObjectOverlaySettings({ obj, viewerManager }: { obj: any, viewerM
 
             {obj.type === 'point' && (
                 <div className="flex flex-col gap-2">
-                    <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">{obj.name || "Point"}</div>
+                    <div className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">{obj.name || "Point"}</div>
                     <ScaleSliderRow 
                         label="Diameter" 
                         value={obj.diameter || 0.2} 
@@ -379,7 +379,7 @@ function ActiveObjectOverlaySettings({ obj, viewerManager }: { obj: any, viewerM
             )}
             
             {['measurement', 'angle'].includes(obj.type) && (
-                <div className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-widest">{obj.name || obj.type}</div>
+                <div className="text-[10px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-widest">{obj.name || obj.type}</div>
             )}
         </div>
     );

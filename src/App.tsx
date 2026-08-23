@@ -88,9 +88,15 @@ function MainLayout() {
       
       if (e.key.toLowerCase() === 'f') {
         if (!document.fullscreenElement) {
-          document.documentElement.requestFullscreen().catch(() => {});
+          const promise = document.documentElement.requestFullscreen();
+          if (promise && typeof promise.catch === 'function') {
+            promise.catch(() => {});
+          }
         } else {
-          document.exitFullscreen().catch(() => {});
+          const promise = document.exitFullscreen();
+          if (promise && typeof promise.catch === 'function') {
+            promise.catch(() => {});
+          }
         }
       }
     };
@@ -100,8 +106,8 @@ function MainLayout() {
   }, [viewerManager]);
 
   return (
-    <div className="flex flex-col h-dvh w-dvw overflow-hidden bg-slate-100 dark:bg-slate-950 sm:p-4 text-slate-900 dark:text-slate-200 transition-colors">
-      <div className="flex flex-col flex-1 overflow-hidden sm:border sm:border-slate-300 dark:sm:border-slate-700 bg-white dark:bg-slate-900 shadow-sm rounded-sm">
+    <div className="flex flex-col h-dvh w-dvw overflow-hidden bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-200 transition-colors">
+      <div className="flex flex-col flex-1 overflow-hidden ">
         <Header toggleSidebar={() => {
           setSidebarCollapsed(!sidebarCollapsed);
           setTimeout(() => {

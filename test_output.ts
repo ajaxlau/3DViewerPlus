@@ -557,7 +557,7 @@ export class ViewerManager {
     try {
       const serialized = this.planningObjects.map(obj => {
         const base = {
-          id: obj.id,
+          id: (obj.id && !this.planningObjects.some(existing => existing.id === obj.id)) ? obj.id : `Obj_${this.nextPlanningObjectId++}`,
           name: obj.name,
           type: obj.type,
           color: obj.color,
@@ -787,7 +787,7 @@ if (modelRoot && window.THREE) { geometry.applyMatrix4(modelRoot.matrixWorld); }
               }
 
               const newObj = {
-                  id: obj.id,
+                  id: (obj.id && !this.planningObjects.some(existing => existing.id === obj.id)) ? obj.id : `Obj_${this.nextPlanningObjectId++}`,
                   name: obj.name,
                   type: 'custom_model',
                   mesh,
@@ -2793,9 +2793,6 @@ if (modelRoot && window.THREE) { geometry.applyMatrix4(modelRoot.matrixWorld); }
           fileDataURL: ''
       };
       
-      // Align the duplicated model with the rendering effect of all models
-      this.updateMeshColorAndVisibility(newObj);
-      
       const generatedStl = this.generateSTLString(newObj, true);
       if (generatedStl) {
           const blob = new Blob([generatedStl], { type: 'text/plain' });
@@ -3244,18 +3241,13 @@ if (modelRoot && window.THREE) { geometry.applyMatrix4(modelRoot.matrixWorld); }
           if (newObj.mesh && obj.mesh) {
               newObj.mesh.position.copy(obj.mesh.position);
               newObj.mesh.quaternion.copy(obj.mesh.quaternion);
-              newObj.mesh.scale.copy(obj.mesh.scale);
               newObj.posX = obj.mesh.position.x;
               newObj.posY = obj.mesh.position.y;
               newObj.posZ = obj.mesh.position.z;
-              newObj.rotQx = obj.mesh.quaternion.x;
-              newObj.rotQy = obj.mesh.quaternion.y;
-              newObj.rotQz = obj.mesh.quaternion.z;
-              newObj.rotQw = obj.mesh.quaternion.w;
-              newObj.scaleX = obj.mesh.scale.x;
-              newObj.scaleY = obj.mesh.scale.y;
-              newObj.scaleZ = obj.mesh.scale.z;
-              newObj.mesh.updateMatrixWorld(true);
+              newObj.rotQx = obj.rotQx;
+              newObj.rotQy = obj.rotQy;
+              newObj.rotQz = obj.rotQz;
+              newObj.rotQw = obj.rotQw;
           }
           if (obj.visible === false) {
              newObj.visible = false;
@@ -3273,9 +3265,6 @@ if (modelRoot && window.THREE) { geometry.applyMatrix4(modelRoot.matrixWorld); }
               newObj.labelDiv.style.display = newObj.visible ? 'block' : 'none';
           }
           
-          if (this.viewer?.viewer) {
-              try { this.viewer.viewer.Render(); } catch (e) {}
-          }
           if (this.config.onPlanningObjectsChange) {
               this.config.onPlanningObjectsChange([...this.planningObjects]);
           }
@@ -3291,12 +3280,11 @@ if (modelRoot && window.THREE) { geometry.applyMatrix4(modelRoot.matrixWorld); }
       const stl = this.generateSTLString(obj, true);
       if (!stl) return;
 
-      const blob = new Blob([stl], { type: 'application/octet-stream' });
+      const blob = new Blob([stl], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      const safeName = (obj.name || obj.id).replace(/\.stl$/i, '');
-      link.download = `${safeName}.stl`;
+      link.download = `${obj.name || obj.id}.stl`;
       link.click();
       URL.revokeObjectURL(url);
   }
@@ -3443,7 +3431,7 @@ if (modelRoot && window.THREE) { geometry.applyMatrix4(modelRoot.matrixWorld); }
           }
           
           metadataList.push({
-              id: obj.id,
+              id: (obj.id && !this.planningObjects.some(existing => existing.id === obj.id)) ? obj.id : `Obj_${this.nextPlanningObjectId++}`,
               name: obj.name || obj.id,
               type: obj.type,
               color: obj.color,
@@ -3648,7 +3636,7 @@ It contains both Slicer markup properties and the application's internal groupin
           }
 
           metadataList.push({
-              id: obj.id,
+              id: (obj.id && !this.planningObjects.some(existing => existing.id === obj.id)) ? obj.id : `Obj_${this.nextPlanningObjectId++}`,
               name: obj.name || obj.id,
               type: obj.type,
               color: obj.color,
@@ -4356,7 +4344,7 @@ if (modelRoot && window.THREE) { geometry.applyMatrix4(modelRoot.matrixWorld); }
               }
 
               this.planningObjects.push({
-                  id: (obj.id && !this.planningObjects.some(existing => existing.id === obj.id)) ? obj.id : `CustomModel_${this.nextPlanningObjectId++}`,
+                  id: (obj.id && !this.planningObjects.some(existing => existing.id === obj.id)) ? obj.id : ` CustomModel_${this.nextPlanningObjectId++}`,
                   name: obj.name,
                   type: 'custom_model',
                   mesh,
@@ -4387,22 +4375,20 @@ if (modelRoot && window.THREE) { geometry.applyMatrix4(modelRoot.matrixWorld); }
               }
               
               if (newObj.mesh) {
-                  if (obj.type === 'custom_model' || (obj.type !== 'plane' && obj.type !== 'cylinder' && obj.type !== 'point' && obj.type !== 'curve' && obj.type !== 'angle' && obj.type !== 'measurement')) {
+                  if (obj.type === 'custom_model') {
                       if (obj.posX !== undefined) {
                           const localPos = new window.THREE.Vector3(obj.posX, obj.posY, obj.posZ);
                           const localQuat = new window.THREE.Quaternion(obj.rotQx || 0, obj.rotQy || 0, obj.rotQz || 0, obj.rotQw !== undefined ? obj.rotQw : 1);
                           const localScale = new window.THREE.Vector3(obj.scaleX || 1, obj.scaleY || 1, obj.scaleZ || 1);
                           
-                          const mLocal = new window.THREE.Matrix4().compose(localPos, localQuat, localScale);
-                          if (modelRoot && window.THREE) {
-                              mLocal.premultiply(modelRoot.matrixWorld);
-                          }
-                          mLocal.decompose(localPos, localQuat, localScale);
-
                           newObj.mesh.position.copy(localPos);
                           newObj.mesh.quaternion.copy(localQuat);
                           newObj.mesh.scale.copy(localScale);
                       }
+                  } else if (obj.type !== 'plane' && obj.type !== 'cylinder' && obj.type !== 'point' && obj.type !== 'curve' && obj.type !== 'angle' && obj.type !== 'measurement') {
+                      if (obj.posX !== undefined) newObj.mesh.position.set(obj.posX, obj.posY, obj.posZ);
+                      if (obj.rotQx !== undefined) newObj.mesh.quaternion.set(obj.rotQx, obj.rotQy, obj.rotQz, obj.rotQw);
+                      if (obj.scaleX !== undefined) newObj.mesh.scale.set(obj.scaleX, obj.scaleY, obj.scaleZ);
                   }
               }
 
@@ -4497,9 +4483,6 @@ if (modelRoot && window.THREE) { geometry.applyMatrix4(modelRoot.matrixWorld); }
               if (this.highlightedPlanningObj.opacity !== undefined) {
                   m.transparent = true;
                   m.opacity = this.highlightedPlanningObj.opacity;
-              }
-              if (this.originalColors.has(m)) {
-                  this.originalColors.delete(m);
               }
               m.needsUpdate = true;
           };
