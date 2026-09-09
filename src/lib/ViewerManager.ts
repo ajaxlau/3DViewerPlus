@@ -1,3 +1,5 @@
+import { trackModelLoad, trackPlanningAction, trackExport } from './analytics';
+
 declare global {
   interface Window {
     OV: any;
@@ -833,6 +835,7 @@ if (modelRoot && window.THREE) { geometry.applyMatrix4(modelRoot.matrixWorld); }
     const filename = fileArray[0].name;
 
     this.config.onStatusChange('Loading model data...', false, filename, null);
+    trackModelLoad('file', filename.split('.').pop(), fileArray.length);
     
     try {
       this.viewer.LoadModelFromFileList(fileArray);
@@ -851,6 +854,7 @@ if (modelRoot && window.THREE) { geometry.applyMatrix4(modelRoot.matrixWorld); }
     const filename = url.split('/').pop()?.split('?')[0] || 'Remote Model';
 
     this.config.onStatusChange('Loading model from URL...', false, filename, url);
+    trackModelLoad('url', filename.split('.').pop(), 1);
     
     try {
       this.viewer.LoadModelFromUrlList([url]);
@@ -1851,6 +1855,7 @@ if (modelRoot && window.THREE) { geometry.applyMatrix4(modelRoot.matrixWorld); }
           const angleDeg = angleRad * (180 / Math.PI);
 
           this.createPlanningAngle(p1, p2, p3, angleDeg);
+          trackPlanningAction('create_angle', 'angle', { angle: Math.round(angleDeg * 10) / 10 });
           this.clearPlanningPoints();
 
           if (this.config.onPlanningObjectsChange) {
@@ -1862,6 +1867,7 @@ if (modelRoot && window.THREE) { geometry.applyMatrix4(modelRoot.matrixWorld); }
       if (this.planningMode === 'point' && this.planningPoints.length === 1) {
           const p = this.planningPoints[0];
           this.createPlanningPoint(p, 0.2); // default 0.2mm
+          trackPlanningAction('create_point', 'point');
           this.clearPlanningPoints();
           if (this.config.onPlanningObjectsChange) {
               this.config.onPlanningObjectsChange(this.planningObjects);
@@ -1932,6 +1938,7 @@ if (modelRoot && window.THREE) { geometry.applyMatrix4(modelRoot.matrixWorld); }
   confirmPlanningObject(options: { planeExtWidth?: number, planeExtLength?: number, cylinderRadius?: number, cylinderExtension?: number, curveThickness?: number } = {}) {
       if (this.planningMode === 'plane' && this.planningPoints.length === 3) {
           this.createPlanningPlane(this.planningPoints[0], this.planningPoints[1], this.planningPoints[2], options.planeExtWidth, options.planeExtLength);
+          trackPlanningAction('create_plane', 'plane', { width: options.planeExtWidth, length: options.planeExtLength });
           this.setPlanningMode('none');
           if (this.config.onPlanningObjectsChange) {
               this.config.onPlanningObjectsChange(this.planningObjects);
@@ -1939,6 +1946,7 @@ if (modelRoot && window.THREE) { geometry.applyMatrix4(modelRoot.matrixWorld); }
           this.saveToLocalStorage();
       } else if (this.planningMode === 'cylinder' && this.planningPoints.length === 2) {
           this.createPlanningCylinder(this.planningPoints[0], this.planningPoints[1], options.cylinderRadius, options.cylinderExtension);
+          trackPlanningAction('create_cylinder', 'cylinder', { radius: options.cylinderRadius, extension: options.cylinderExtension });
           this.setPlanningMode('none');
           if (this.config.onPlanningObjectsChange) {
               this.config.onPlanningObjectsChange(this.planningObjects);
@@ -1948,6 +1956,7 @@ if (modelRoot && window.THREE) { geometry.applyMatrix4(modelRoot.matrixWorld); }
           const m = this.calculateMeasurement();
           const angle = m ? m.angle : 0;
           this.createPlanningMeasurement(this.planningPoints[0], this.planningPoints[1], angle);
+          trackPlanningAction('create_measurement', 'measurement', { distance: m?.distance });
           this.setPlanningMode('none');
           if (this.config.onPlanningObjectsChange) {
               this.config.onPlanningObjectsChange(this.planningObjects);
@@ -1955,6 +1964,7 @@ if (modelRoot && window.THREE) { geometry.applyMatrix4(modelRoot.matrixWorld); }
           this.saveToLocalStorage();
       } else if (this.planningMode === 'curve' && this.planningPoints.length >= 2) {
           this.createPlanningCurve(this.planningPoints, options.curveThickness !== undefined ? options.curveThickness : 0.2);
+          trackPlanningAction('create_curve', 'curve', { points_count: this.planningPoints.length });
           this.setPlanningMode('none');
           if (this.config.onPlanningObjectsChange) {
               this.config.onPlanningObjectsChange(this.planningObjects);
@@ -3291,6 +3301,8 @@ if (modelRoot && window.THREE) { geometry.applyMatrix4(modelRoot.matrixWorld); }
       const stl = this.generateSTLString(obj, true);
       if (!stl) return;
 
+      trackExport('stl', { object_type: obj.type, name: obj.name });
+
       const blob = new Blob([stl], { type: 'application/octet-stream' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
@@ -3307,6 +3319,8 @@ if (modelRoot && window.THREE) { geometry.applyMatrix4(modelRoot.matrixWorld); }
 
       const groupObjects = this.planningObjects.filter(obj => obj.groupId === groupId);
       if (groupObjects.length === 0) return;
+
+      trackExport('zip', { group_id: groupId, count: groupObjects.length });
 
       const JSZip = (await import('jszip')).default;
       const zip = new JSZip();
