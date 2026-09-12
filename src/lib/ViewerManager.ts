@@ -758,56 +758,62 @@ export class ViewerManager {
             if (created) { created.color = created.color || '#9333ea'; }
             prepareCreatedObj(created);
           } else if (obj.type === 'custom_model' && obj.fileDataURL) {
-              const res = await fetch(obj.fileDataURL);
-              const arrayBuffer = await res.arrayBuffer();
-              const loader = new window.THREE.STLLoader();
-              const geometry = loader.parse(arrayBuffer);
-if (modelRoot && window.THREE) { geometry.applyMatrix4(modelRoot.matrixWorld); }
-              geometry.computeBoundingBox();
-      geometry.computeBoundingSphere();
-      const center = new window.THREE.Vector3();
-      geometry.boundingBox.getCenter(center);
-      geometry.translate(-center.x, -center.y, -center.z);
-      geometry.computeBoundingBox();
-      geometry.computeBoundingSphere();
+              try {
+                  const res = await fetch(obj.fileDataURL);
+                  if (res.ok) {
+                      const arrayBuffer = await res.arrayBuffer();
+                      const loader = new window.THREE.STLLoader();
+                      const geometry = loader.parse(arrayBuffer);
+                      if (modelRoot && window.THREE) { geometry.applyMatrix4(modelRoot.matrixWorld); }
+                      geometry.computeBoundingBox();
+                      geometry.computeBoundingSphere();
+                      const center = new window.THREE.Vector3();
+                      geometry.boundingBox.getCenter(center);
+                      geometry.translate(-center.x, -center.y, -center.z);
+                      geometry.computeBoundingBox();
+                      geometry.computeBoundingSphere();
 
-              const material = new THREE.MeshStandardMaterial({
-                  color: 0x8b5cf6,
-                  transparent: true,
-                  opacity: 0.7,
-                  depthTest: true,
-                  depthWrite: true,
-                  side: THREE.DoubleSide
-              });
-              const mesh = new THREE.Mesh(geometry, material);
-              mesh.renderOrder = 999;
-//               mesh.position.set(0, 0, 0);
+                      if (geometry.attributes && geometry.attributes.color) {
+                          geometry.deleteAttribute('color');
+                      }
 
-              const edges = new THREE.EdgesGeometry(geometry);
-              const lineMaterial = new THREE.LineBasicMaterial({ color: 0x4c1d95, linewidth: 2, depthTest: false });
-              const line = new THREE.LineSegments(edges, lineMaterial);
-              line.userData.isEdge = true;
-              mesh.add(line);
+                      const material = new THREE.MeshStandardMaterial({
+                          color: obj.color ? new THREE.Color(obj.color) : new THREE.Color(0x8b5cf6),
+                          transparent: true,
+                          opacity: obj.opacity !== undefined ? obj.opacity : 0.7,
+                          depthTest: true,
+                          depthWrite: true,
+                          side: THREE.DoubleSide,
+                          roughness: 0.35,
+                          metalness: 0.1
+                      });
+                      const mesh = new THREE.Mesh(geometry, material);
+                      mesh.renderOrder = 999;
+                      mesh.position.copy(center);
+                      mesh.userData = { isCustomOverlay: true };
+                      
+                      if (this.viewer && this.viewer.viewer) {
+                          const scene = this.viewer.viewer.scene || this.viewer.viewer.mainScene;
+                          if (scene) scene.add(mesh);
+                      }
 
-              mesh.userData = { isCustomOverlay: true };
-              
-              if (this.viewer && this.viewer.viewer) {
-                  const scene = this.viewer.viewer.scene || this.viewer.viewer.mainScene;
-                  if (scene) scene.add(mesh);
+                      const newObj = {
+                          id: obj.id,
+                          name: obj.name,
+                          type: 'custom_model',
+                          mesh,
+                          color: obj.color || '#8b5cf6',
+                          opacity: obj.opacity !== undefined ? obj.opacity : 0.7,
+                          fileName: obj.fileName,
+                          fileDataURL: obj.fileDataURL
+                      };
+                      
+                      this.planningObjects.push(newObj);
+                      prepareCreatedObj(newObj);
+                  }
+              } catch (fetchErr) {
+                  console.warn("Could not reload custom model from stored fileDataURL:", obj.name, fetchErr);
               }
-
-              const newObj = {
-                  id: obj.id,
-                  name: obj.name,
-                  type: 'custom_model',
-                  mesh,
-                  color: obj.color || '#8b5cf6',
-                  fileName: obj.fileName,
-                  fileDataURL: obj.fileDataURL
-              };
-              
-              this.planningObjects.push(newObj);
-              prepareCreatedObj(newObj);
           }
         } catch (err) {
           console.warn("Failed to reconstruct serialized planning object", obj, err);
@@ -2671,25 +2677,25 @@ if (modelRoot && window.THREE) { geometry.applyMatrix4(modelRoot.matrixWorld); }
       geometry.computeBoundingBox();
       geometry.computeBoundingSphere();
 
+      if (geometry.attributes && geometry.attributes.color) {
+          geometry.deleteAttribute('color');
+      }
+
       const material = new window.THREE.MeshStandardMaterial({
               color: 0x8b5cf6,
               transparent: true,
               opacity: 0.7,
               depthTest: true,
               depthWrite: true,
-              side: window.THREE.DoubleSide
+              side: window.THREE.DoubleSide,
+              roughness: 0.35,
+              metalness: 0.1
           });
 
       const mesh = new THREE.Mesh(geometry, material);
       mesh.renderOrder = 999;
       
       mesh.position.copy(center);
-
-      const edges = new THREE.EdgesGeometry(geometry);
-      const lineMaterial = new THREE.LineBasicMaterial({ color: 0x4c1d95, linewidth: 2, depthTest: false });
-      const line = new THREE.LineSegments(edges, lineMaterial);
-              line.userData.isEdge = true;
-              mesh.add(line);
 
       mesh.userData = { isCustomOverlay: true };
       scene.add(mesh);
@@ -2716,6 +2722,7 @@ if (modelRoot && window.THREE) { geometry.applyMatrix4(modelRoot.matrixWorld); }
 
   async duplicateSubmeshToPlanningObjects(meshIndex: number) {
       if (meshIndex < 0 || meshIndex >= this.currentMeshes.length) return null;
+      this.clearHighlight();
       const sourceMesh = this.currentMeshes[meshIndex];
       if (!sourceMesh || !window.THREE) return null;
 
@@ -2737,51 +2744,27 @@ if (modelRoot && window.THREE) { geometry.applyMatrix4(modelRoot.matrixWorld); }
       cloneGeo.boundingBox.getCenter(center);
       cloneGeo.translate(-center.x, -center.y, -center.z);
 
-      // Material for overlay - inherit from source mesh to match quality
-      let material;
-      if (sourceMesh.material) {
-          if (Array.isArray(sourceMesh.material)) {
-              material = sourceMesh.material.map((m: any) => {
-                  const mClone = m.clone();
-                  mClone.transparent = true;
-                  mClone.opacity = 0.7;
-                  mClone.depthTest = true;
-                  mClone.depthWrite = true;
-                  return mClone;
-              });
-          } else {
-              material = sourceMesh.material.clone();
-              material.transparent = true;
-              material.opacity = 0.7;
-              material.depthTest = true;
-              material.depthWrite = true;
-          }
-      } else {
-          material = new THREE.MeshStandardMaterial({
-              color: 0x8b5cf6, // purple default
-              transparent: true,
-              opacity: 0.7,
-              depthTest: true,
-              depthWrite: true,
-              side: THREE.DoubleSide
-          });
+      if (cloneGeo.attributes && cloneGeo.attributes.color) {
+          cloneGeo.deleteAttribute('color');
       }
+
+      // Fresh clean material for overlay to avoid inheriting texture maps or vertex color conflicts
+      const material = new THREE.MeshStandardMaterial({
+          color: 0x8b5cf6, // purple default
+          transparent: true,
+          opacity: 0.7,
+          depthTest: true,
+          depthWrite: true,
+          side: THREE.DoubleSide,
+          roughness: 0.35,
+          metalness: 0.1
+      });
 
       const mesh = new THREE.Mesh(cloneGeo, material);
       sourceMesh.matrixWorld.decompose(mesh.position, mesh.quaternion, mesh.scale);
       mesh.position.copy(center.clone().applyMatrix4(sourceMesh.matrixWorld));
       mesh.updateMatrixWorld(true);
       mesh.renderOrder = 999;
-
-      try {
-          const edges = new THREE.EdgesGeometry(cloneGeo);
-          const lineMaterial = new THREE.LineBasicMaterial({ color: 0x4c1d95, linewidth: 2, depthTest: false });
-          const line = new THREE.LineSegments(edges, lineMaterial);
-              line.userData.isEdge = true;
-              mesh.add(line);
-      } catch (e) {
-          // ignore
-      }
 
       mesh.userData = { isCustomOverlay: true };
       scene.add(mesh);
@@ -3220,6 +3203,10 @@ if (modelRoot && window.THREE) { geometry.applyMatrix4(modelRoot.matrixWorld); }
           );
       } else if (obj.type === 'custom_model') {
           const meshClone = obj.mesh.clone();
+          if (meshClone.children) {
+              const edgeChildren = meshClone.children.filter((c: any) => c.isLineSegments || c.type === 'LineSegments' || c.userData?.isEdge);
+              edgeChildren.forEach((c: any) => meshClone.remove(c));
+          }
           if (meshClone.material) {
               if (Array.isArray(meshClone.material)) {
                   meshClone.material = meshClone.material.map((m: any) => m.clone());
@@ -3494,6 +3481,7 @@ if (modelRoot && window.THREE) { geometry.applyMatrix4(modelRoot.matrixWorld); }
       if (slicerJson) {
           zip.file(`${group.name.replace(/[^a-zA-Z0-9_-]/g, '_')}_Slicer.mrk.json`, slicerJson);
       }
+      zip.file('metadata.json', JSON.stringify(exportData, null, 2));
 
       const readmeText = `COORDINATE SYSTEM DEFINITION & SPECIFICATION
 ---------------------------------------------
@@ -3698,6 +3686,7 @@ It contains both Slicer markup properties and the application's internal groupin
       if (slicerJson) {
           zip.file(`All_Planning.mrk.json`, slicerJson);
       }
+      zip.file('metadata.json', JSON.stringify(exportData, null, 2));
 
       // Separate explicit README for clarity on standard clinical and engineering coordinate alignment
       const readmeText = `COORDINATE SYSTEM DEFINITION & SPECIFICATION
@@ -4182,16 +4171,30 @@ It contains both Slicer markup properties and the application's internal groupin
 
   updateMeshColorAndVisibility(obj: any) {
       if (obj.mesh && window.THREE) {
+          // Clean up any legacy wireframe edge segments from custom models
+          if (obj.type === 'custom_model' && obj.mesh.children) {
+              const edgeChildren = obj.mesh.children.filter((c: any) => c.isLineSegments || c.type === 'LineSegments' || c.userData?.isEdge);
+              edgeChildren.forEach((c: any) => {
+                  if (c.geometry && typeof c.geometry.dispose === 'function') {
+                      try { c.geometry.dispose(); } catch (e) {}
+                  }
+                  if (c.material && typeof c.material.dispose === 'function') {
+                      try { c.material.dispose(); } catch (e) {}
+                  }
+                  obj.mesh.remove(c);
+              });
+          }
+
           const updateMat = (m: any) => {
               if (m.color) {
                   m.color.set(obj.color);
                   if (obj.type === 'custom_model') {
-                      if (m.vertexColors !== undefined) m.vertexColors = typeof m.vertexColors === 'number' ? 0 : false;
+                      if (m.vertexColors !== undefined) m.vertexColors = false;
                       if (m.map !== undefined) m.map = null;
                   }
               }
               if (obj.opacity !== undefined) {
-                  m.transparent = true;
+                  m.transparent = obj.opacity < 1.0;
                   m.opacity = obj.opacity;
                   if (obj.type === 'custom_model') {
                       // Avoid self-occlusion artifacts when transparent
@@ -4233,7 +4236,7 @@ It contains both Slicer markup properties and the application's internal groupin
       }
   }
 
-  private async _recreatePlanningObjects(json: any) {
+  private async _recreatePlanningObjects(json: any, zipContents?: any) {
       if (!json) return;
       
       const objectsToLoad = json.objects || [];
@@ -4273,150 +4276,211 @@ It contains both Slicer markup properties and the application's internal groupin
       };
 
       for (const obj of objectsToLoad) {
-          if (obj.type === 'plane' && obj.p1 && obj.p2 && obj.p3) {
-              const p1 = applyModelTransform(obj.p1);
-              const p2 = applyModelTransform(obj.p2);
-              const p3 = applyModelTransform(obj.p3);
-              this.createPlanningPlane(
-                  new window.THREE.Vector3(p1.x, p1.y, p1.z),
-                  new window.THREE.Vector3(p2.x, p2.y, p2.z),
-                  new window.THREE.Vector3(p3.x, p3.y, p3.z),
-                  obj.extWidth,
-                  obj.extLength
-              );
-              if (this.planningObjects.length > 0) {
-                  const newObj = this.planningObjects[this.planningObjects.length - 1];
-                  this.updatePlaneGeometry(newObj.id, obj.extWidth || 0, obj.thickness || 0);
-              }
-          } else if (obj.type === 'cylinder' && obj.p1 && obj.p2) {
-              const p1 = applyModelTransform(obj.p1);
-              const p2 = applyModelTransform(obj.p2);
-              this.createPlanningCylinder(
-                  new window.THREE.Vector3(p1.x, p1.y, p1.z),
-                  new window.THREE.Vector3(p2.x, p2.y, p2.z),
-                  (obj.diameter !== undefined ? obj.diameter : obj.radius * 2) / 2,
-                  obj.extension
-              );
-          } else if (obj.type === 'curve' && obj.points) {
-              const pts = obj.points.map((p: any) => applyModelTransform(p));
-              this.createPlanningCurve(
-                  pts.map((p: any) => new window.THREE.Vector3(p.x, p.y, p.z)),
-                  obj.thickness
-              );
-          } else if (obj.type === 'measurement' && obj.p1 && obj.p2Coord) {
-              const p1 = applyModelTransform(obj.p1);
-              const p2Coord = applyModelTransform(obj.p2Coord);
-              this.createPlanningMeasurement(
-                  new window.THREE.Vector3(p1.x, p1.y, p1.z),
-                  new window.THREE.Vector3(p2Coord.x, p2Coord.y, p2Coord.z),
-                  obj.angle || 0
-              );
-          } else if (obj.type === 'angle' && obj.p1 && obj.p2Coord && obj.p3) {
-              const p1 = applyModelTransform(obj.p1);
-              const p2Coord = applyModelTransform(obj.p2Coord);
-              const p3 = applyModelTransform(obj.p3);
-              this.createPlanningAngle(
-                  new window.THREE.Vector3(p1.x, p1.y, p1.z),
-                  new window.THREE.Vector3(p2Coord.x, p2Coord.y, p2Coord.z),
-                  new window.THREE.Vector3(p3.x, p3.y, p3.z),
-                  obj.angle || 0
-              );
-          } else if (obj.type === 'point' && obj.points && obj.points.length > 0) {
-              const p0 = applyModelTransform(obj.points[0]);
-              this.createPlanningPoint(
-                  new window.THREE.Vector3(p0.x, p0.y, p0.z),
-                  obj.diameter || 0.2
-              );
-          } else if (obj.type === 'custom_model' && obj.fileDataURL) {
-              const res = await fetch(obj.fileDataURL);
-              const arrayBuffer = await res.arrayBuffer();
-              const loader = new window.THREE.STLLoader();
-              const geometry = loader.parse(arrayBuffer);
-if (modelRoot && window.THREE) { geometry.applyMatrix4(modelRoot.matrixWorld); }
-              geometry.computeBoundingBox();
-      geometry.computeBoundingSphere();
-      const center = new window.THREE.Vector3();
-      geometry.boundingBox.getCenter(center);
-      geometry.translate(-center.x, -center.y, -center.z);
-      geometry.computeBoundingBox();
-      geometry.computeBoundingSphere();
+          try {
+              let objectCreated = false;
 
-              const material = new window.THREE.MeshStandardMaterial({
-                  color: 0x8b5cf6,
-                  transparent: true,
-                  opacity: 0.7,
-                  depthTest: true,
-                  depthWrite: true,
-                  side: window.THREE.DoubleSide
-              });
-              const mesh = new window.THREE.Mesh(geometry, material);
-              mesh.renderOrder = 999;
-              mesh.position.copy(center);
-
-              const edges = new window.THREE.EdgesGeometry(geometry);
-              const lineMaterial = new window.THREE.LineBasicMaterial({ color: 0x4c1d95, linewidth: 2, depthTest: false });
-              const line = new window.THREE.LineSegments(edges, lineMaterial);
-              mesh.add(line);
-
-              mesh.userData = { isCustomOverlay: true };
-              
-              if (this.viewer && this.viewer.viewer) {
-                  const scene = this.viewer.viewer.scene || this.viewer.viewer.mainScene;
-                  if (scene) scene.add(mesh);
-              }
-
-              this.planningObjects.push({
-                  id: (obj.id && !this.planningObjects.some(existing => existing.id === obj.id)) ? obj.id : `CustomModel_${this.nextPlanningObjectId++}`,
-                  name: obj.name,
-                  type: 'custom_model',
-                  mesh,
-                  color: obj.color || '#8b5cf6',
-                  fileName: obj.fileName,
-                  fileDataURL: obj.fileDataURL
-              });
-          } else {
-             console.warn("Unsupported or missing data for planning object:", obj);
-             continue;
-          }
-
-          if (this.planningObjects.length > 0) {
-              const newObj = this.planningObjects[this.planningObjects.length - 1];
-              newObj.name = obj.name;
-              newObj.color = obj.color;
-              newObj.visible = typeof obj.visible === 'boolean' ? obj.visible : true;
-              
-              if (obj.groupName && groupMap.has(obj.groupName)) {
-                  newObj.groupId = groupMap.get(obj.groupName)!;
-              } else if (groupMap.has('export_group')) {
-                  newObj.groupId = groupMap.get('export_group')!;
-              } else if (obj.groupId) {
-                  const existingGrp = this.planningGroups.find(g => g.id === obj.groupId);
-                  if (existingGrp) {
-                      newObj.groupId = existingGrp.id;
+              if (obj.type === 'plane' && obj.p1 && obj.p2 && obj.p3) {
+                  const p1 = applyModelTransform(obj.p1);
+                  const p2 = applyModelTransform(obj.p2);
+                  const p3 = applyModelTransform(obj.p3);
+                  this.createPlanningPlane(
+                      new window.THREE.Vector3(p1.x, p1.y, p1.z),
+                      new window.THREE.Vector3(p2.x, p2.y, p2.z),
+                      new window.THREE.Vector3(p3.x, p3.y, p3.z),
+                      obj.extWidth,
+                      obj.extLength
+                  );
+                  if (this.planningObjects.length > 0) {
+                      const newObj = this.planningObjects[this.planningObjects.length - 1];
+                      this.updatePlaneGeometry(newObj.id, obj.extWidth || 0, obj.thickness || 0);
                   }
-              }
-              
-              if (newObj.mesh) {
-                  if (obj.type === 'custom_model' || (obj.type !== 'plane' && obj.type !== 'cylinder' && obj.type !== 'point' && obj.type !== 'curve' && obj.type !== 'angle' && obj.type !== 'measurement')) {
-                      if (obj.posX !== undefined) {
-                          const localPos = new window.THREE.Vector3(obj.posX, obj.posY, obj.posZ);
-                          const localQuat = new window.THREE.Quaternion(obj.rotQx || 0, obj.rotQy || 0, obj.rotQz || 0, obj.rotQw !== undefined ? obj.rotQw : 1);
-                          const localScale = new window.THREE.Vector3(obj.scaleX || 1, obj.scaleY || 1, obj.scaleZ || 1);
-                          
-                          const mLocal = new window.THREE.Matrix4().compose(localPos, localQuat, localScale);
-                          if (modelRoot && window.THREE) {
-                              mLocal.premultiply(modelRoot.matrixWorld);
-                          }
-                          mLocal.decompose(localPos, localQuat, localScale);
+                  objectCreated = true;
+              } else if (obj.type === 'cylinder' && obj.p1 && obj.p2) {
+                  const p1 = applyModelTransform(obj.p1);
+                  const p2 = applyModelTransform(obj.p2);
+                  this.createPlanningCylinder(
+                      new window.THREE.Vector3(p1.x, p1.y, p1.z),
+                      new window.THREE.Vector3(p2.x, p2.y, p2.z),
+                      (obj.diameter !== undefined ? obj.diameter : obj.radius * 2) / 2,
+                      obj.extension
+                  );
+                  objectCreated = true;
+              } else if (obj.type === 'curve' && obj.points) {
+                  const pts = obj.points.map((p: any) => applyModelTransform(p));
+                  this.createPlanningCurve(
+                      pts.map((p: any) => new window.THREE.Vector3(p.x, p.y, p.z)),
+                      obj.thickness
+                  );
+                  objectCreated = true;
+              } else if (obj.type === 'measurement' && obj.p1 && obj.p2Coord) {
+                  const p1 = applyModelTransform(obj.p1);
+                  const p2Coord = applyModelTransform(obj.p2Coord);
+                  this.createPlanningMeasurement(
+                      new window.THREE.Vector3(p1.x, p1.y, p1.z),
+                      new window.THREE.Vector3(p2Coord.x, p2Coord.y, p2Coord.z),
+                      obj.angle || 0
+                  );
+                  objectCreated = true;
+              } else if (obj.type === 'angle' && obj.p1 && obj.p2Coord && obj.p3) {
+                  const p1 = applyModelTransform(obj.p1);
+                  const p2Coord = applyModelTransform(obj.p2Coord);
+                  const p3 = applyModelTransform(obj.p3);
+                  this.createPlanningAngle(
+                      new window.THREE.Vector3(p1.x, p1.y, p1.z),
+                      new window.THREE.Vector3(p2Coord.x, p2Coord.y, p2Coord.z),
+                      new window.THREE.Vector3(p3.x, p3.y, p3.z),
+                      obj.angle || 0
+                  );
+                  objectCreated = true;
+              } else if (obj.type === 'point' && obj.points && obj.points.length > 0) {
+                  const p0 = applyModelTransform(obj.points[0]);
+                  this.createPlanningPoint(
+                      new window.THREE.Vector3(p0.x, p0.y, p0.z),
+                      obj.diameter || 0.2
+                  );
+                  objectCreated = true;
+              } else if (obj.type === 'custom_model') {
+                  let arrayBuffer: ArrayBuffer | null = null;
+                  let freshDataURL = obj.fileDataURL || '';
 
-                          newObj.mesh.position.copy(localPos);
-                          newObj.mesh.quaternion.copy(localQuat);
-                          newObj.mesh.scale.copy(localScale);
+                  // Look for matching STL entry in zipContents if available
+                  if (zipContents && zipContents.files) {
+                      const candidateNames = [
+                          obj.fileName,
+                          obj.name ? `${obj.name}.stl` : null,
+                          obj.id ? `${obj.id}.stl` : null,
+                          obj.name,
+                          obj.id
+                      ].filter(Boolean).map(n => (n as string).toLowerCase().trim());
+
+                      for (const key of Object.keys(zipContents.files)) {
+                          if (key.startsWith('__MACOSX/') || key.includes('/__MACOSX/')) continue;
+                          const baseName = (key.split('/').pop() || '').toLowerCase().trim();
+                          if (baseName.startsWith('.')) continue;
+
+                          if (candidateNames.includes(baseName) || (baseName.endsWith('.stl') && candidateNames.includes(baseName.replace(/\.stl$/i, '')))) {
+                              try {
+                                  arrayBuffer = await zipContents.files[key].async("arraybuffer");
+                                  const blob = new Blob([arrayBuffer], { type: 'application/octet-stream' });
+                                  freshDataURL = URL.createObjectURL(blob);
+                                  break;
+                              } catch (zipReadErr) {
+                                  console.warn("Failed reading STL buffer from zip entry:", key, zipReadErr);
+                              }
+                          }
                       }
                   }
+
+                  // Fallback: try fetching from fileDataURL if buffer not in zip
+                  if (!arrayBuffer && obj.fileDataURL) {
+                      try {
+                          const res = await fetch(obj.fileDataURL);
+                          if (res.ok) {
+                              arrayBuffer = await res.arrayBuffer();
+                          }
+                      } catch (fetchErr) {
+                          console.warn("Could not fetch fileDataURL for custom model:", obj.name, fetchErr);
+                      }
+                  }
+
+                  if (!arrayBuffer) {
+                      console.warn("Could not retrieve 3D data for custom model:", obj.name || obj.id);
+                      continue;
+                  }
+
+                  const loader = new window.THREE.STLLoader();
+                  const geometry = loader.parse(arrayBuffer);
+                  if (modelRoot && window.THREE) { geometry.applyMatrix4(modelRoot.matrixWorld); }
+                  geometry.computeBoundingBox();
+                  geometry.computeBoundingSphere();
+                  const center = new window.THREE.Vector3();
+                  geometry.boundingBox.getCenter(center);
+                  geometry.translate(-center.x, -center.y, -center.z);
+                  geometry.computeBoundingBox();
+                  geometry.computeBoundingSphere();
+
+                  if (geometry.attributes && geometry.attributes.color) {
+                      geometry.deleteAttribute('color');
+                  }
+
+                  const material = new window.THREE.MeshStandardMaterial({
+                      color: obj.color ? new window.THREE.Color(obj.color) : new window.THREE.Color(0x8b5cf6),
+                      transparent: (obj.opacity !== undefined ? obj.opacity : 0.7) < 1.0,
+                      opacity: obj.opacity !== undefined ? obj.opacity : 0.7,
+                      depthTest: true,
+                      depthWrite: (obj.opacity !== undefined ? obj.opacity : 0.7) >= 1.0,
+                      side: window.THREE.DoubleSide,
+                      roughness: 0.35,
+                      metalness: 0.1
+                  });
+                  const mesh = new window.THREE.Mesh(geometry, material);
+                  mesh.renderOrder = 999;
+                  mesh.position.copy(center);
+
+                  mesh.userData = { isCustomOverlay: true };
+                  
+                  if (this.viewer && this.viewer.viewer) {
+                      const scene = this.viewer.viewer.scene || this.viewer.viewer.mainScene;
+                      if (scene) scene.add(mesh);
+                  }
+
+                  this.planningObjects.push({
+                      id: (obj.id && !this.planningObjects.some(existing => existing.id === obj.id)) ? obj.id : `CustomModel_${this.nextPlanningObjectId++}`,
+                      name: obj.name,
+                      type: 'custom_model',
+                      mesh,
+                      color: obj.color || '#8b5cf6',
+                      opacity: obj.opacity !== undefined ? obj.opacity : 0.7,
+                      fileName: obj.fileName || `${obj.name || 'Model'}.stl`,
+                      fileDataURL: freshDataURL
+                  });
+                  objectCreated = true;
+              } else {
+                  console.warn("Unsupported or missing data for planning object:", obj);
+                  continue;
               }
 
-              this.updateMeshColorAndVisibility(newObj);
+              if (objectCreated && this.planningObjects.length > 0) {
+                  const newObj = this.planningObjects[this.planningObjects.length - 1];
+                  newObj.name = obj.name;
+                  newObj.color = obj.color;
+                  newObj.visible = typeof obj.visible === 'boolean' ? obj.visible : true;
+                  
+                  if (obj.groupName && groupMap.has(obj.groupName)) {
+                      newObj.groupId = groupMap.get(obj.groupName)!;
+                  } else if (groupMap.has('export_group')) {
+                      newObj.groupId = groupMap.get('export_group')!;
+                  } else if (obj.groupId) {
+                      const existingGrp = this.planningGroups.find(g => g.id === obj.groupId);
+                      if (existingGrp) {
+                          newObj.groupId = existingGrp.id;
+                      }
+                  }
+                  
+                  if (newObj.mesh) {
+                      if (obj.type === 'custom_model' || (obj.type !== 'plane' && obj.type !== 'cylinder' && obj.type !== 'point' && obj.type !== 'curve' && obj.type !== 'angle' && obj.type !== 'measurement')) {
+                          if (obj.posX !== undefined) {
+                              const localPos = new window.THREE.Vector3(obj.posX, obj.posY, obj.posZ);
+                              const localQuat = new window.THREE.Quaternion(obj.rotQx || 0, obj.rotQy || 0, obj.rotQz || 0, obj.rotQw !== undefined ? obj.rotQw : 1);
+                              const localScale = new window.THREE.Vector3(obj.scaleX || 1, obj.scaleY || 1, obj.scaleZ || 1);
+                              
+                              const mLocal = new window.THREE.Matrix4().compose(localPos, localQuat, localScale);
+                              if (modelRoot && window.THREE) {
+                                  mLocal.premultiply(modelRoot.matrixWorld);
+                              }
+                              mLocal.decompose(localPos, localQuat, localScale);
+
+                              newObj.mesh.position.copy(localPos);
+                              newObj.mesh.quaternion.copy(localQuat);
+                              newObj.mesh.scale.copy(localScale);
+                          }
+                      }
+                  }
+
+                  this.updateMeshColorAndVisibility(newObj);
+              }
+          } catch (itemErr) {
+              console.error("Error recreating planning object:", obj?.name || obj?.id, itemErr);
           }
       }
       if (this.config.onPlanningObjectsChange) {
@@ -4445,44 +4509,123 @@ if (modelRoot && window.THREE) { geometry.applyMatrix4(modelRoot.matrixWorld); }
           }
           return;
       }
+
+      // Read array buffer immediately while the file handle is active
+      let arrayBuffer: ArrayBuffer;
+      try {
+          arrayBuffer = await file.arrayBuffer();
+      } catch (readErr) {
+          console.error("Failed to read planning ZIP file buffer:", readErr);
+          return;
+      }
       
-      const JSZip = (await import('jszip')).default;
+      let JSZip: any;
+      try {
+          const jszipMod = await import('jszip');
+          JSZip = jszipMod.default || jszipMod;
+      } catch (importErr) {
+          console.error("Failed to load JSZip module:", importErr);
+          return;
+      }
+
       const zip = new JSZip();
       try {
-          const contents = await zip.loadAsync(file);
+          const contents = await zip.loadAsync(arrayBuffer);
           
-          let metadataStr = "";
+          const isValidZipEntry = (name: string) => {
+              if (name.startsWith('__MACOSX/') || name.includes('/__MACOSX/')) return false;
+              const baseName = name.split('/').pop() || '';
+              if (baseName.startsWith('.')) return false;
+              return true;
+          };
+
+          const validFiles = Object.keys(contents.files).filter(isValidZipEntry);
+
           let json: any = null;
 
-          if (contents.files['metadata.json']) {
-              metadataStr = await contents.files['metadata.json'].async("string");
-              json = JSON.parse(metadataStr);
-          } else {
-              // Search for any .mrk.json or .json file
-              const mrkFile = Object.keys(contents.files).find(name => name.endsWith('.mrk.json') || name.endsWith('.json'));
-              if (mrkFile) {
-                  metadataStr = await contents.files[mrkFile].async("string");
-                  json = JSON.parse(metadataStr);
+          // Priority 1: metadata.json
+          const metadataKey = validFiles.find(name => {
+              const b = name.split('/').pop()?.toLowerCase();
+              return b === 'metadata.json';
+          });
+          if (metadataKey) {
+              try {
+                  const str = await contents.files[metadataKey].async("string");
+                  json = JSON.parse(str);
+              } catch (e) {
+                  console.warn("Failed to parse metadata.json in zip:", e);
+              }
+          }
+
+          // Priority 2: *.mrk.json
+          if (!json) {
+              const mrkKey = validFiles.find(name => {
+                  const b = name.split('/').pop()?.toLowerCase() || '';
+                  return b.endsWith('.mrk.json');
+              });
+              if (mrkKey) {
+                  try {
+                      const str = await contents.files[mrkKey].async("string");
+                      json = JSON.parse(str);
+                  } catch (e) {
+                      console.warn("Failed to parse .mrk.json in zip:", e);
+                  }
+              }
+          }
+
+          // Priority 3: any other .json file
+          if (!json) {
+              const jsonKey = validFiles.find(name => {
+                  const b = name.split('/').pop()?.toLowerCase() || '';
+                  return b.endsWith('.json');
+              });
+              if (jsonKey) {
+                  try {
+                      const str = await contents.files[jsonKey].async("string");
+                      json = JSON.parse(str);
+                  } catch (e) {
+                      console.warn("Failed to parse json file in zip:", e);
+                  }
               }
           }
 
           if (json && json.appMetaData) {
               // We have full app state embedded in the Slicer markups file, use that.
               json = json.appMetaData;
-          } else if (json && json.markups) {
+          } else if (json && json.markups && (!json.objects || json.objects.length === 0)) {
               await this.loadSlicerMarkupsJson(json);
               return;
           }
 
-          if (!json) {
-              console.warn("No metadata or markups file found in the zip archive.");
+          if (json && (json.objects || json.group)) {
+              await this._recreatePlanningObjects(json, contents);
               return;
           }
 
-          await this._recreatePlanningObjects(json);
+          // Fallback: Check if the zip contains standalone STL files
+          const stlFiles = validFiles.filter(name => {
+              const b = name.split('/').pop()?.toLowerCase() || '';
+              return b.endsWith('.stl');
+          });
+
+          if (stlFiles.length > 0) {
+              for (const stlPath of stlFiles) {
+                  const baseName = (stlPath.split('/').pop() || '').replace(/\.stl$/i, '');
+                  try {
+                      const stlBuffer = await contents.files[stlPath].async("arraybuffer");
+                      const fakeFile = new File([stlBuffer], `${baseName}.stl`);
+                      await this.importCustomPlanningModel(fakeFile);
+                  } catch (stlErr) {
+                      console.error("Failed importing STL from zip:", stlPath, stlErr);
+                  }
+              }
+              return;
+          }
+
+          console.warn("No compatible planning metadata (.json, .mrk.json) or STL files found in the zip archive.");
 
       } catch (e) {
-          console.error("Failed to parse or load planning ZIP file", e);
+          console.error("Failed to parse or load planning ZIP file:", e);
       }
   }
 

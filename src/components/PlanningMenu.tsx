@@ -335,12 +335,15 @@ export function PlanningMenu() {
                             accept=".zip,.json,.mrk.json"
                             ref={fileInputRef}
                             className="hidden"
-                            onChange={(e) => {
+                            onChange={async (e) => {
                                 const file = e.target.files?.[0];
-                                if (file) {
-                                    viewerManager?.importPlanningObjectsZip(file);
+                                if (file && viewerManager) {
+                                    try {
+                                        await viewerManager.importPlanningObjectsZip(file);
+                                    } catch (err) {
+                                        console.error("Error importing planning objects:", err);
+                                    }
                                 }
-                                // Reset input
                                 if (fileInputRef.current) fileInputRef.current.value = '';
                             }}
                         />
@@ -359,12 +362,15 @@ export function PlanningMenu() {
                             accept=".stl"
                             ref={stlInputRef}
                             className="hidden"
-                            onChange={(e) => {
+                            onChange={async (e) => {
                                 const file = e.target.files?.[0];
-                                if (file) {
-                                    viewerManager?.importCustomPlanningModel(file);
+                                if (file && viewerManager) {
+                                    try {
+                                        await viewerManager.importCustomPlanningModel(file);
+                                    } catch (err) {
+                                        console.error("Error importing custom model STL:", err);
+                                    }
                                 }
-                                // Reset input
                                 if (stlInputRef.current) stlInputRef.current.value = '';
                             }}
                         />
