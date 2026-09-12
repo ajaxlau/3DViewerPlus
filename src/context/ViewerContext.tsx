@@ -100,8 +100,25 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
   const [planningPointsPicked, setPlanningPointsPicked] = useState(0);
   const [measurement, setMeasurement] = useState<{ distance: number, angle: number } | null>(null);
 
-  const [backgroundImage, setBackgroundImage] = useState<string | null>(null);
+  const [backgroundImage, setBackgroundImageState] = useState<string | null>(null);
   const [backgroundOpacity, setBackgroundOpacity] = useState<number>(0.5);
+
+  const setBackgroundImage = (url: string | null) => {
+    setBackgroundImageState((prev) => {
+      if (prev && prev.startsWith('blob:') && prev !== url) {
+        try { URL.revokeObjectURL(prev); } catch (e) {}
+      }
+      return url;
+    });
+  };
+
+  useEffect(() => {
+    return () => {
+      if (backgroundImage && backgroundImage.startsWith('blob:')) {
+        try { URL.revokeObjectURL(backgroundImage); } catch (e) {}
+      }
+    };
+  }, [backgroundImage]);
 
   const [isTransformActive, setIsTransformActive] = useState(false);
   const [transformMode, setTransformMode] = useState<'translate' | 'rotate' | 'scale'>('translate');

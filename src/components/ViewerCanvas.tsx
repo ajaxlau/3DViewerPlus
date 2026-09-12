@@ -14,6 +14,14 @@ export function ViewerCanvas() {
   const [showQuickMenu, setShowQuickMenu] = useState(false);
   const infoRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const topRulerCanvasRef = useRef<HTMLCanvasElement | null>(null);
+  const leftRulerCanvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  useEffect(() => {
+    if (topRulerCanvasRef.current && leftRulerCanvasRef.current) {
+      setRulerRefs(topRulerCanvasRef.current, leftRulerCanvasRef.current);
+    }
+  }, [setRulerRefs]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -42,14 +50,11 @@ export function ViewerCanvas() {
     const input = document.createElement('input');
     input.type = 'file';
     input.multiple = true;
-    input.style.display = 'none';
-    document.body.appendChild(input);
     input.onchange = (e) => {
       const files = (e.target as HTMLInputElement).files;
       if (files && files.length > 0 && viewerManager) {
         viewerManager.loadFiles(files);
       }
-      setTimeout(() => document.body.removeChild(input), 100);
     };
     input.click();
   };
@@ -136,9 +141,9 @@ export function ViewerCanvas() {
       {isTransformActive && activeTransformObjectId && ['plane', 'cylinder', 'custom_model'].includes(planningObjects.find(o => o.id === activeTransformObjectId)?.type || '') && (
         <div className="absolute top-6 right-6 z-20 flex bg-white/90 dark:bg-zinc-800/90 backdrop-blur shadow-md rounded-md p-1 border border-zinc-200 dark:border-zinc-700">
             <button
-              onClick={() => viewerManager?.setTransformMode('tranzinc')}
-              className={`p-2 rounded ${transformMode === 'tranzinc' ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400' : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700/50'} transition-colors`}
-              title="Tranzinc"
+              onClick={() => viewerManager?.setTransformMode('translate')}
+              className={`p-2 rounded ${transformMode === 'translate' ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400' : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-zinc-700/50'} transition-colors`}
+              title="Translate"
             >
               <Move size={18} />
             </button>
@@ -157,17 +162,17 @@ export function ViewerCanvas() {
         <div ref={menuRef} className="absolute bottom-6 left-6 z-20 flex flex-col-reverse items-center gap-3">
           <button
             onClick={() => setShowQuickMenu(!showQuickMenu)}
-            className={`w-12 h-12 rounded-full flex items-center justify-center transition-all focus:outline-none shadow-[0_4px_14px_0_rgba(59,130,246,0.39)] hover:shadow-[0_6px_20px_rgba(59,130,246,0.23)] hover:-tranzinc-y-0.5 active:tranzinc-y-0 active:scale-95 z-30
+            className={`w-12 h-12 rounded-full flex items-center justify-center transition-all focus:outline-none shadow-[0_4px_14px_0_rgba(59,130,246,0.39)] hover:shadow-[0_6px_20px_rgba(59,130,246,0.23)] hover:-translate-y-0.5 active:translate-y-0 active:scale-95 z-30
               ${showQuickMenu ? 'bg-zinc-800 text-white dark:bg-white dark:text-zinc-900 rotate-45' : 'bg-gradient-to-tr from-blue-600 to-indigo-500 hover:from-blue-500 hover:to-indigo-400 text-white'}`}
             title="Quick Menu"
           >
             <Plus size={24} className="transition-transform duration-300" />
           </button>
           
-          <div className={`flex flex-col gap-3 transition-all duration-300 origin-bottom ${showQuickMenu ? 'opacity-100 scale-100 tranzinc-y-0 pointer-events-auto' : 'opacity-0 scale-95 tranzinc-y-4 pointer-events-none'}`}>
+          <div className={`flex flex-col gap-3 transition-all duration-300 origin-bottom ${showQuickMenu ? 'opacity-100 scale-100 translate-y-0 pointer-events-auto' : 'opacity-0 scale-95 translate-y-4 pointer-events-none'}`}>
             <button
               onClick={handleQuickSnapshotShare}
-              className="w-10 h-10 rounded-full bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 flex items-center justify-center shadow-lg transition-all hover:bg-zinc-50 dark:hover:bg-zinc-700 hover:-tranzinc-y-0.5 active:tranzinc-y-0 active:scale-95 focus:outline-none border border-zinc-200 dark:border-zinc-700"
+              className="w-10 h-10 rounded-full bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 flex items-center justify-center shadow-lg transition-all hover:bg-zinc-50 dark:hover:bg-zinc-700 hover:-translate-y-0.5 active:translate-y-0 active:scale-95 focus:outline-none border border-zinc-200 dark:border-zinc-700"
               title="Share Snapshot"
             >
               <Camera size={18} />
@@ -176,7 +181,7 @@ export function ViewerCanvas() {
             <div ref={infoRef} className="relative">
               <button
                 onClick={(e) => { e.stopPropagation(); setShowInfo(!showInfo); }}
-                className={`w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-all hover:-tranzinc-y-0.5 active:tranzinc-y-0 active:scale-95 focus:outline-none border
+                className={`w-10 h-10 rounded-full flex items-center justify-center shadow-lg transition-all hover:-translate-y-0.5 active:translate-y-0 active:scale-95 focus:outline-none border
                   ${showInfo ? 'bg-blue-100 dark:bg-blue-900/40 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800/50' : 'bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-700'}`}
                 title="Shortcuts Info"
               >
@@ -234,8 +239,8 @@ export function ViewerCanvas() {
         <div className="absolute top-0 left-0 w-6 h-6 bg-zinc-50 dark:bg-zinc-900 border-r border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-center text-[9px] font-bold text-zinc-500 z-20 box-border">
           mm
         </div>
-        <canvas ref={(el) => { if(el) setTimeout(() => setRulerRefs(el), 0) }} id="ruler-top" className="absolute top-0 left-6 right-0 h-6 w-[calc(100%-24px)] z-10 block" />
-        <canvas ref={(el) => { if(el) setTimeout(() => setRulerRefs(undefined, el), 0) }} id="ruler-left" className="absolute top-6 left-0 bottom-0 w-6 h-[calc(100%-24px)] z-10 block" />
+        <canvas ref={topRulerCanvasRef} id="ruler-top" className="absolute top-0 left-6 right-0 h-6 w-[calc(100%-24px)] z-10 block" />
+        <canvas ref={leftRulerCanvasRef} id="ruler-left" className="absolute top-6 left-0 bottom-0 w-6 h-[calc(100%-24px)] z-10 block" />
       </div>
 
       {/* Empty State */}

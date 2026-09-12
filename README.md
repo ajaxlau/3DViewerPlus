@@ -1,8 +1,5 @@
 # NTEC 3D Printing Office — 3D Viewer Plus (3DPO miniVSP)
 
-[![Visitors](https://visitor-badge.laobi.icu/badge?page_id=ntec-3dpo.3d-viewer-plus)](https://visitor-badge.laobi.icu)
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-
 An interactive, high-performance web-based 3D Medical Model Viewer and Virtual Surgical Planning (miniVSP) platform developed for the Medical 3D Printing Service**.
 
 ---
@@ -85,16 +82,6 @@ An interactive, high-performance web-based 3D Medical Model Viewer and Virtual S
 * **Archive & Data Parsing**: JSZip, Slicer Markups JSON Parser, STLLoader
 * **Animation & UI Components**: Motion (Framer Motion), Lucide React Icons
 * **Sharing & Connectivity**: QRCode.react, Service Worker / Vite PWA
-
----
-
-## 📊 Global Visitor Statistics
-
-<p align="left">
-  <a href="https://info.flagcounter.com/6ewu">
-    <img src="https://s01.flagcounter.com/count/6ewu/bg_FFFFFF/txt_000000/border_CCCCCC/columns_2/maxflags_18/viewers_0/labels_1/pageviews_1/flags_0/percent_0/" alt="Flag Counter" border="0">
-  </a>
-</p>
 
 ---
 

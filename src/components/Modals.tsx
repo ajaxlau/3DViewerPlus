@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { useViewer } from '../context/ViewerContext';
 import { QRCodeSVG } from 'qrcode.react';
 import JSZip from 'jszip';
-import { trackEvent, trackExport } from '../lib/analytics';
 
 export function Modals() {
   const { activeModal, setActiveModal, filename, loadedUrl, isEmpty } = useViewer();
@@ -60,7 +59,6 @@ export function Modals() {
 
   const handleLoadUrl = () => {
     if (urlInput.trim() && window._viewerManagerInstance) {
-      trackEvent('load_url_submit', { url: urlInput.trim() });
       window._viewerManagerInstance.loadUrl(urlInput.trim());
       setUrlInput('');
       setActiveModal(null);
@@ -70,7 +68,6 @@ export function Modals() {
   const [copied, setCopied] = useState(false);
 
   const copyToClipboard = async (text: string) => {
-    trackEvent('copy_share_url');
     try {
       if (navigator.clipboard && navigator.clipboard.writeText) {
         await navigator.clipboard.writeText(text);
@@ -204,7 +201,7 @@ export function Modals() {
       link.href = zipUrl;
       link.download = `${dlBaseName}_360_snapshots.zip`;
       link.click();
-      setTimeout(() => URL.revokeObjectURL(zipUrl), 100);
+      setTimeout(() => URL.revokeObjectURL(zipUrl), 1000);
     } catch (err) {
       console.error("Failed to generate or download 360 ZIP in memory", err);
     }
@@ -251,7 +248,6 @@ export function Modals() {
 
     const dataUrl = window._viewerManagerInstance.captureSnapshot(targetW, targetH, snapTrans);
     if (dataUrl) {
-        trackExport('snapshot', { resolution: snapRes, width: targetW, height: targetH, transparent: snapTrans });
         const link = document.createElement('a');
         link.href = dataUrl;
         link.download = `${dlBaseName}_snapshot.png`;

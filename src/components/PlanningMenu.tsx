@@ -133,7 +133,7 @@ export function PlanningMenu() {
                     <div className="p-3 border-t border-amber-200 dark:border-amber-800/30 bg-amber-50/50 dark:bg-amber-900/10 text-xs text-amber-800 dark:text-amber-300 flex flex-col gap-3 rounded-b">
                         <div className="text-center mb-1 leading-normal">
                             Click on the 3D model to select three points:<br/>
-                            1. Star point, <strong>2. Vertex / Center point</strong>, 3. End point.<br/>
+                            1. Start point, <strong>2. Vertex / Center point</strong>, 3. End point.<br/>
                             <span className="font-semibold text-amber-600 dark:text-amber-400">Angle is automatically measured and saved below.</span><br/>
                             Points picked: <strong>{planningPointsPicked}</strong> / 3
                         </div>
@@ -431,7 +431,7 @@ export function PlanningMenu() {
                 />
                 <button 
                     onClick={handleCreateGroup} 
-                    className="px-2 py-1 py-1.5 rounded bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] flex items-center gap-1 transition shadow-sm shrink-0"
+                    className="px-2 py-1.5 rounded bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] flex items-center gap-1 transition shadow-sm shrink-0"
                     title="Create Group"
                 >
                     <FolderPlus size={12} />
@@ -457,7 +457,7 @@ export function PlanningMenu() {
                         return (
                             <div 
                                 key={group.id} 
-                                className="border border-zinc-250 dark:border-zinc-800 rounded mb-2 overflow-hidden bg-white dark:bg-zinc-900 shadow-sm"
+                                className="border border-zinc-200 dark:border-zinc-800 rounded mb-2 overflow-hidden bg-white dark:bg-zinc-900 shadow-sm"
                                 onDragOver={(e) => e.preventDefault()}
                                 onDrop={(e) => {
                                     e.preventDefault();
@@ -479,7 +479,7 @@ export function PlanningMenu() {
                                         
                                         <input 
                                             type="text" 
-                                            className="text-[11px] font-bold bg-transparent border-none text-zinc-850 dark:text-zinc-100 focus:bg-white dark:focus:bg-zinc-950 focus:ring-1 focus:ring-blue-500 rounded px-1.5 py-0.5 w-full flex-1 min-w-0"
+                                            className="text-[11px] font-bold bg-transparent border-none text-zinc-800 dark:text-zinc-100 focus:bg-white dark:focus:bg-zinc-950 focus:ring-1 focus:ring-blue-500 rounded px-1.5 py-0.5 w-full flex-1 min-w-0"
                                             value={group.name}
                                             onChange={(e) => viewerManager?.renamePlanningGroup(group.id, e.target.value)}
                                             placeholder="Edit group name..."
@@ -505,7 +505,7 @@ export function PlanningMenu() {
                                         </button>
                                         {confirmDeleteGroupId === group.id ? (
                                             <div className="flex items-center gap-1 shrink-0 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 px-1 py-0.5 rounded text-[9px]">
-                                                <span className="text-red-650 dark:text-red-400 font-bold mr-0.5 scale-90">Delete?</span>
+                                                <span className="text-red-600 dark:text-red-400 font-bold mr-0.5 scale-90">Delete?</span>
                                                 <button 
                                                     onClick={() => {
                                                         viewerManager?.removePlanningGroup(group.id, true);
@@ -517,7 +517,7 @@ export function PlanningMenu() {
                                                 </button>
                                                 <button 
                                                     onClick={() => setConfirmDeleteGroupId(null)} 
-                                                    className="bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 px-1 rounded hover:bg-zinc-300 dark:hover:bg-zinc-705 transition"
+                                                    className="bg-zinc-200 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 px-1 rounded hover:bg-zinc-300 dark:hover:bg-zinc-700 transition"
                                                 >
                                                     No
                                                 </button>
@@ -599,29 +599,8 @@ export function PlanningMenu() {
   );
 }
 
-function ScaleSliderRow({ label, value, min, max, step, onChange, isMm = false }: { label: string, value: number, min: number, max: number, step: number, onChange: (v: number) => void, isMm?: boolean }) {
-    return (
-        <div className="flex flex-col gap-1 my-1">
-            <div className="flex justify-between items-center text-[10px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">
-                <span>{label}</span>
-                <span className="font-mono text-blue-600 dark:text-blue-400">
-                    {isMm ? `${value.toFixed(1)} mm` : `${(value * 100).toFixed(0)}%`}
-                </span>
-            </div>
-            <input 
-                type="range" 
-                min={min} max={max} step={step}
-                value={value} 
-                onChange={e => onChange(parseFloat(e.target.value))}
-                className="w-full h-1 bg-zinc-200 dark:bg-zinc-800 rounded-lg appearance-none cursor-pointer accent-blue-500 dark:accent-blue-400 focus:outline-none"
-            />
-        </div>
-    );
-}
-
 function PlanningObjectItem({ obj, viewerManager }: { obj: any, viewerManager: any, key?: any }) {
   const { planningGroups = [] } = useViewer();
-  const [open, setOpen] = useState(false);
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
   const [isOpacitySliderOpen, setIsOpacitySliderOpen] = useState(false);
   const [draggable, setDraggable] = useState(false);
@@ -642,15 +621,6 @@ function PlanningObjectItem({ obj, viewerManager }: { obj: any, viewerManager: a
       document.removeEventListener('mousedown', handleClickOutside);
     };
   }, [isColorPickerOpen, isOpacitySliderOpen]);
-
-  const [planeExtSize, setPlaneExtSize] = useState(obj.extWidth !== undefined ? obj.extWidth : 10);
-  const [planeThickness, setPlaneThickness] = useState(obj.thickness !== undefined ? obj.thickness : 0.0);
-  
-  const [cylinderDiameter, setCylinderDiameter] = useState(obj.diameter !== undefined ? obj.diameter : 1.0);
-  const [cylinderExtension, setCylinderExtension] = useState(obj.extension !== undefined ? obj.extension : 20);
-  
-  const [curveDiameter, setCurveDiameter] = useState(obj.thickness !== undefined ? obj.thickness : 0.2);
-  const [pointDiameter, setPointDiameter] = useState(obj.diameter !== undefined ? obj.diameter : 0.2);
 
   const [localPos, setLocalPos] = useState({ x: obj.posX, y: obj.posY, z: obj.posZ });
 
@@ -698,54 +668,6 @@ function PlanningObjectItem({ obj, viewerManager }: { obj: any, viewerManager: a
     };
   }, [viewerManager, obj.mesh]);
 
-  useEffect(() => {
-    if (!open) return;
-    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
-      if (itemRef.current && !itemRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    
-    const timer = setTimeout(() => {
-      document.addEventListener('mousedown', handleClickOutside);
-      document.addEventListener('touchstart', handleClickOutside, { passive: true });
-    }, 50);
-
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('touchstart', handleClickOutside);
-    };
-  }, [open]);
-
-  const handlePlaneChange = (extSize?: number, thk?: number) => {
-      const nextExt = extSize !== undefined ? extSize : planeExtSize;
-      const nextThk = thk !== undefined ? thk : planeThickness;
-      viewerManager.updatePlaneGeometry(obj.id, nextExt, nextThk);
-      if (extSize !== undefined) setPlaneExtSize(extSize);
-      if (thk !== undefined) setPlaneThickness(thk);
-  };
-
-  const handleCylinderChange = (dia?: number, ext?: number) => {
-      const nextDia = dia !== undefined ? dia : cylinderDiameter;
-      const nextExt = ext !== undefined ? ext : cylinderExtension;
-      viewerManager.updateCylinderGeometry(obj.id, nextDia, nextExt);
-      if (dia !== undefined) setCylinderDiameter(dia);
-      if (ext !== undefined) setCylinderExtension(ext);
-  };
-
-  const updateCurveDiameter = (val: number) => {
-      viewerManager.updatePlanningObjectCurveThickness(obj.id, val);
-      setCurveDiameter(val);
-  };
-
-  const updatePointDiameter = (val: number) => {
-      if (viewerManager && typeof viewerManager.updatePlanningPointDiameter === 'function') {
-          viewerManager.updatePlanningPointDiameter(obj.id, val);
-      }
-      setPointDiameter(val);
-  };
-
   return (
       <div
         ref={itemRef}
@@ -776,7 +698,7 @@ function PlanningObjectItem({ obj, viewerManager }: { obj: any, viewerManager: a
       >
           <div className="bg-zinc-50 dark:bg-zinc-800 flex flex-col p-2 gap-1.5 relative">
               <div 
-                  className="absolute top-1 right-1 text-zinc-300 dark:text-zinc-600 opacity-50 group-hover/item:opacity-100 transition-opacity cursor-grab active:cursor-grabbing p-1 hover:text-blue-550 dark:hover:text-blue-400"
+                  className="absolute top-1 right-1 text-zinc-300 dark:text-zinc-600 opacity-50 group-hover/item:opacity-100 transition-opacity cursor-grab active:cursor-grabbing p-1 hover:text-blue-500 dark:hover:text-blue-400"
                   title="Drag to rearrange"
                   onPointerDown={() => setDraggable(true)}
                   onPointerUp={() => setDraggable(false)}
@@ -807,7 +729,7 @@ function PlanningObjectItem({ obj, viewerManager }: { obj: any, viewerManager: a
                   )}
                   {obj.type === 'curve' && obj.thickness !== undefined && (
                       <span className="text-[11px] font-mono leading-tight whitespace-nowrap tracking-tight">
-                          Len: {(obj.baseDistance || 0).toFixed(1)} mm | Dia: {curveDiameter.toFixed(1)} mm
+                          Len: {(obj.baseDistance || 0).toFixed(1)} mm | Dia: {(obj.thickness ?? 0.2).toFixed(1)} mm
                       </span>
                   )}
                   {obj.type === 'measurement' && obj.baseDistance !== undefined && (
@@ -822,7 +744,7 @@ function PlanningObjectItem({ obj, viewerManager }: { obj: any, viewerManager: a
                   )}
                   {obj.type === 'point' && obj.diameter !== undefined && (
                       <span className="text-[11px] font-mono leading-tight whitespace-nowrap tracking-tight text-purple-600 dark:text-purple-400 font-bold">
-                          D: {pointDiameter.toFixed(1)} mm
+                          D: {(obj.diameter ?? 0.2).toFixed(1)} mm
                           {localPos.x !== undefined && <span className="ml-2 text-[9px] text-zinc-400 dark:text-zinc-500 font-normal">Pos: {localPos.x.toFixed(1)}, {localPos.y?.toFixed(1)}, {localPos.z?.toFixed(1)}</span>}
                       </span>
                   )}
