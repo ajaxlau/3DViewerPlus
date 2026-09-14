@@ -10,6 +10,15 @@
     <!-- Favicon and Web App Icon -->
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-PMRERS84H9"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+
+      gtag('config', 'G-PMRERS84H9');
+    </script>
     <!-- Include Three.js for Raycasting & Math utilities to prevent undefined errors -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js" crossorigin="anonymous"></script>
     <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/TransformControls.js" crossorigin="anonymous"></script>
@@ -27,6 +36,9 @@
           }
           if (window.THREE.BufferGeometry && !window.THREE.BufferGeometry.prototype.onBeforeRender) {
               window.THREE.BufferGeometry.prototype.onBeforeRender = function() {};
+          }
+          if (window.THREE.Texture && window.THREE.Texture.prototype.channel === undefined) {
+              window.THREE.Texture.prototype.channel = 0;
           }
       }
     </script>

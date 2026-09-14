@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useRef, useEffect, ReactNode } from 'react';
-import { ViewerManager } from '../lib/ViewerManager';
+import { ViewerManager, FlyThroughState, SplineClippingState } from '../lib/ViewerManager';
 
 export interface MeshInfo {
   id: number;
@@ -27,6 +27,9 @@ interface ViewerContextState {
   clipPlanes: Record<'x'|'y'|'z', { active: boolean, invert: boolean, sliderVal: number, alignToCamera?: boolean }>;
   updateClipPlane: (axis: 'x'|'y'|'z', updates: Partial<{ active: boolean, invert: boolean, sliderVal: number, alignToCamera?: boolean }>) => void;
   
+  isGhostingMode: boolean;
+  setIsGhostingMode: (val: boolean) => void;
+  
   explodeValue: number;
   setExplodeValue: (val: number) => void;
   
@@ -41,8 +44,9 @@ interface ViewerContextState {
   isAutoRotating: boolean;
   setIsAutoRotating: (val: boolean) => void;
   // Modals state
-  activeModal: 'url' | 'share' | 'snapshot' | 'planning' | null;
-  setActiveModal: (modal: 'url' | 'share' | 'snapshot' | 'planning' | null) => void;
+  activeModal: 'url' | 'share' | 'snapshot' | 'planning' | 'reset' | 'large-model-guide' | null;
+  setActiveModal: (modal: 'url' | 'share' | 'snapshot' | 'planning' | 'reset' | 'large-model-guide' | null) => void;
+  resetWorkspace: () => void;
 
   // Planning Tools
   planningMode: 'none' | 'plane' | 'cylinder' | 'measure' | 'curve' | 'angle' | 'point';
@@ -53,6 +57,34 @@ interface ViewerContextState {
   setPlanningGroups: (groups: any[]) => void;
   planningPointsPicked: number;
   measurement: { distance: number, angle: number } | null;
+
+  // Curved Anatomical Fly-Through
+  flyThroughState: FlyThroughState;
+  startFlyThrough: (curveId?: string, autoPlay?: boolean) => boolean;
+  pauseFlyThrough: () => void;
+  resumeFlyThrough: () => void;
+  stopFlyThrough: () => void;
+  setFlyThroughProgress: (progress: number) => void;
+  stepFlyThroughDistance: (deltaMm?: number) => void;
+  setFlyThroughSpeed: (speed: number) => void;
+  setFlyThroughDirection: (dir: 1 | -1) => void;
+  setFlyThroughLoop: (loop: boolean) => void;
+  setFlyThroughFov: (fov: number) => void;
+  setFlyThroughReticle: (show: boolean) => void;
+  setFlyThroughLookTrim: (yaw: number, pitch: number) => void;
+  setFlyThroughPathOffset: (offsetX: number, offsetY: number) => void;
+  generateSampleAnatomicalCurve: (meshId?: number | null) => string | null;
+
+  splineClippingState: SplineClippingState;
+  startSplineClipping: (curveId?: string) => boolean;
+  stopSplineClipping: () => void;
+  setSplineClippingProgress: (progress: number) => void;
+  setSplineClippingDistance: (distMm: number) => void;
+  stepSplineClippingDistance: (deltaMm?: number) => void;
+  setSplineClippingInvert: (invert: boolean) => void;
+  setSplineClippingAlignCamera: (align: boolean) => void;
+  zoomSplineCrossSection: (action: 'in' | 'out' | number) => void;
+  setSplineClippingZoomLevel: (level: number) => void;
 
   backgroundImage: string | null;
   setBackgroundImage: (url: string | null) => void;
@@ -88,6 +120,7 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
   });
   const [explodeValue, setExplodeValueState] = useState(0);
   const [highlightedMeshId, setHighlightedMeshId] = useState<number | null>(null);
+  const [isGhostingMode, setIsGhostingModeState] = useState(false);
   const [rulersVisible, setRulersVisible] = useState(false);
   const [isAutoRotating, setIsAutoRotatingState] = useState(false);
   
@@ -123,6 +156,201 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
   const [isTransformActive, setIsTransformActive] = useState(false);
   const [transformMode, setTransformMode] = useState<'translate' | 'rotate' | 'scale'>('translate');
   const [activeTransformObjectId, setActiveTransformObjectId] = useState<string | null>(null);
+
+  // Curved Anatomical Fly-Through State
+  const [flyThroughState, setFlyThroughState] = useState<FlyThroughState>({
+    active: false,
+    isPlaying: false,
+    curveId: null,
+    curveName: null,
+    progress: 0,
+    speed: 1.0,
+    direction: 1,
+    loop: true,
+    fov: 75,
+    showReticle: true,
+    totalDistance: 0,
+    currentDistance: 0,
+    yawOffset: 0,
+    pitchOffset: 0,
+    pathOffsetX: 0,
+    pathOffsetY: 0
+  });
+
+  const [splineClippingState, setSplineClippingState] = useState<SplineClippingState>({
+    active: false,
+    curveId: null,
+    curveName: null,
+    progress: 0.5,
+    totalDistance: 0,
+    currentDistance: 0,
+    invert: false,
+    alignCamera: false,
+    zoomLevel: 1.0
+  });
+
+  const startSplineClipping = (curveId?: string) => {
+    if (!viewerManager) return false;
+    const res = viewerManager.startSplineClipping(curveId);
+    if (res) {
+      setSplineClippingState({ ...viewerManager.splineClippingState });
+    }
+    return res;
+  };
+
+  const stopSplineClipping = () => {
+    if (viewerManager) {
+      viewerManager.stopSplineClipping();
+      setSplineClippingState({ ...viewerManager.splineClippingState });
+    }
+  };
+
+  const setSplineClippingProgress = (prog: number) => {
+    if (viewerManager) {
+      viewerManager.setSplineClippingProgress(prog);
+      setSplineClippingState({ ...viewerManager.splineClippingState });
+    }
+  };
+
+  const setSplineClippingDistance = (distMm: number) => {
+    if (viewerManager) {
+      viewerManager.setSplineClippingDistance(distMm);
+      setSplineClippingState({ ...viewerManager.splineClippingState });
+    }
+  };
+
+  const stepSplineClippingDistance = (deltaMm: number = 0.6) => {
+    if (viewerManager) {
+      viewerManager.stepSplineClippingDistance(deltaMm);
+      setSplineClippingState({ ...viewerManager.splineClippingState });
+    }
+  };
+
+  const setSplineClippingInvert = (invert: boolean) => {
+    if (viewerManager) {
+      viewerManager.setSplineClippingInvert(invert);
+      setSplineClippingState({ ...viewerManager.splineClippingState });
+    }
+  };
+
+  const setSplineClippingAlignCamera = (align: boolean) => {
+    if (viewerManager) {
+      viewerManager.setSplineClippingAlignCamera(align);
+      setSplineClippingState({ ...viewerManager.splineClippingState });
+    }
+  };
+
+  const zoomSplineCrossSection = (action: 'in' | 'out' | number) => {
+    if (viewerManager) {
+      viewerManager.zoomSplineCrossSection(action);
+      setSplineClippingState({ ...viewerManager.splineClippingState });
+    }
+  };
+
+  const setSplineClippingZoomLevel = (level: number) => {
+    if (viewerManager) {
+      viewerManager.setSplineClippingZoomLevel(level);
+      setSplineClippingState({ ...viewerManager.splineClippingState });
+    }
+  };
+
+  const startFlyThrough = (curveId?: string, autoPlay: boolean = false) => {
+    if (!viewerManager) return false;
+    const res = viewerManager.startFlyThrough(curveId, autoPlay);
+    if (res) {
+      setFlyThroughState({ ...viewerManager.flyThroughState });
+    }
+    return res;
+  };
+
+  const pauseFlyThrough = () => {
+    if (viewerManager) {
+      viewerManager.pauseFlyThrough();
+      setFlyThroughState({ ...viewerManager.flyThroughState });
+    }
+  };
+
+  const resumeFlyThrough = () => {
+    if (viewerManager) {
+      viewerManager.resumeFlyThrough();
+      setFlyThroughState({ ...viewerManager.flyThroughState });
+    }
+  };
+
+  const stopFlyThrough = () => {
+    if (viewerManager) {
+      viewerManager.stopFlyThrough();
+      setFlyThroughState({ ...viewerManager.flyThroughState });
+    }
+  };
+
+  const setFlyThroughProgress = (prog: number) => {
+    if (viewerManager) {
+      viewerManager.setFlyThroughProgress(prog);
+      setFlyThroughState({ ...viewerManager.flyThroughState });
+    }
+  };
+
+  const stepFlyThroughDistance = (deltaMm: number = 0.6) => {
+    if (viewerManager) {
+      viewerManager.stepFlyThroughDistance(deltaMm);
+      setFlyThroughState({ ...viewerManager.flyThroughState });
+    }
+  };
+
+  const setFlyThroughSpeed = (speed: number) => {
+    if (viewerManager) {
+      viewerManager.setFlyThroughSpeed(speed);
+      setFlyThroughState({ ...viewerManager.flyThroughState });
+    }
+  };
+
+  const setFlyThroughDirection = (dir: 1 | -1) => {
+    if (viewerManager) {
+      viewerManager.setFlyThroughDirection(dir);
+      setFlyThroughState({ ...viewerManager.flyThroughState });
+    }
+  };
+
+  const setFlyThroughLoop = (loop: boolean) => {
+    if (viewerManager) {
+      viewerManager.setFlyThroughLoop(loop);
+      setFlyThroughState({ ...viewerManager.flyThroughState });
+    }
+  };
+
+  const setFlyThroughFov = (fov: number) => {
+    if (viewerManager) {
+      viewerManager.setFlyThroughFov(fov);
+      setFlyThroughState({ ...viewerManager.flyThroughState });
+    }
+  };
+
+  const setFlyThroughReticle = (show: boolean) => {
+    if (viewerManager) {
+      viewerManager.setFlyThroughReticle(show);
+      setFlyThroughState({ ...viewerManager.flyThroughState });
+    }
+  };
+
+  const setFlyThroughLookTrim = (yaw: number, pitch: number) => {
+    if (viewerManager) {
+      viewerManager.setFlyThroughLookTrim(yaw, pitch);
+      setFlyThroughState({ ...viewerManager.flyThroughState });
+    }
+  };
+
+  const setFlyThroughPathOffset = (offsetX: number, offsetY: number) => {
+    if (viewerManager) {
+      viewerManager.setFlyThroughPathOffset(offsetX, offsetY);
+      setFlyThroughState({ ...viewerManager.flyThroughState });
+    }
+  };
+
+  const generateSampleAnatomicalCurve = (meshId?: number | null) => {
+    if (!viewerManager) return null;
+    return viewerManager.generateSampleAnatomicalCurve(meshId);
+  };
 
   const setPlanningMode = (mode: 'none' | 'plane' | 'cylinder' | 'measure' | 'curve' | 'angle' | 'point') => {
     setPlanningModeState(mode);
@@ -188,7 +416,9 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
            setIsTransformActive(active);
            setActiveTransformObjectId(active ? (objId || null) : null);
         },
-        onTransformModeChange: (mode) => setTransformMode(mode as any)
+        onTransformModeChange: (mode) => setTransformMode(mode as any),
+        onFlyThroughStateChange: (state) => setFlyThroughState({ ...state }),
+        onSplineClippingStateChange: (state) => setSplineClippingState({ ...state })
       });
       const isDark = document.documentElement.classList.contains('dark') || 
                     (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
@@ -234,7 +464,20 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
 
   const updateClipPlane = (axis: 'x'|'y'|'z', updates: Partial<{ active: boolean, invert: boolean, sliderVal: number, alignToCamera?: boolean }>) => {
     setClipPlanes(prev => {
-      const newPlanes = { ...prev, [axis]: { ...prev[axis], ...updates } };
+      let newPlanes = { ...prev, [axis]: { ...prev[axis], ...updates } };
+      // If an axis enables alignToCamera, ensure that axis is active, and deactivate & reset alignToCamera on other axes
+      if (updates.alignToCamera === true) {
+        newPlanes[axis].active = true;
+        (['x', 'y', 'z'] as const).forEach(otherAxis => {
+          if (otherAxis !== axis) {
+            newPlanes[otherAxis] = {
+              ...newPlanes[otherAxis],
+              active: false,
+              alignToCamera: false
+            };
+          }
+        });
+      }
       if (viewerManager && isClipping) viewerManager.updateClippingPlanes(newPlanes);
       return newPlanes;
     });
@@ -273,16 +516,93 @@ export function ViewerProvider({ children }: { children: ReactNode }) {
     if (viewerManager) viewerManager.setRulersVisible(val);
   };
 
+  const setIsGhostingMode = (val: boolean) => {
+    setIsGhostingModeState(val);
+    if (viewerManager) viewerManager.setGhostingMode(val);
+  };
+
+  const resetWorkspace = () => {
+    if (viewerManager) {
+      viewerManager.resetWorkspace();
+    }
+    setStatus('No model loaded.\nPlease open a file.');
+    setLoadingProgress(0);
+    setIsEmpty(true);
+    setMeshes([]);
+    setFilename(null);
+    setLoadedUrl(null);
+    setGlobalOpacityState(1);
+    setIsClippingState(false);
+    setClipPlanes({
+      x: { active: true, invert: false, sliderVal: 50 },
+      y: { active: false, invert: false, sliderVal: 50 },
+      z: { active: false, invert: false, sliderVal: 50 }
+    });
+    setExplodeValueState(0);
+    setHighlightedMeshId(null);
+    setIsGhostingModeState(false);
+    setIsAutoRotatingState(false);
+    setRulersVisible(false);
+    setActiveModal(null);
+    setPlanningModeState('none');
+    setPlanningObjects([]);
+    setPlanningGroups([]);
+    setPlanningPointsPicked(0);
+    setMeasurement(null);
+    setBackgroundImage(null);
+    setIsTransformActive(false);
+    setActiveTransformObjectId(null);
+    setFlyThroughState({
+      active: false,
+      isPlaying: false,
+      curveId: null,
+      curveName: null,
+      progress: 0,
+      speed: 1.0,
+      direction: 1,
+      loop: true,
+      fov: 75,
+      showReticle: true,
+      totalDistance: 0,
+      currentDistance: 0,
+      yawOffset: 0,
+      pitchOffset: 0,
+      pathOffsetX: 0,
+      pathOffsetY: 0
+    });
+    setSplineClippingState({
+      active: false,
+      curveId: null,
+      curveName: null,
+      progress: 0.5,
+      totalDistance: 0,
+      currentDistance: 0,
+      invert: false,
+      alignCamera: false,
+      zoomLevel: 1.0
+    });
+  };
+
   return (
     <ViewerContext.Provider value={{
       viewerManager, theme, setTheme, status, loadingProgress, isEmpty, meshes, filename, loadedUrl,
       globalOpacity, setGlobalOpacity, isClipping, setIsClipping,
-      clipPlanes, updateClipPlane, explodeValue, setExplodeValue,
+      clipPlanes, updateClipPlane,
+      isGhostingMode, setIsGhostingMode,
+      explodeValue, setExplodeValue,
       toggleMeshVisibility, setMeshOpacity, highlightMesh, highlightedMeshId,
       rulersVisible, toggleRulers, isAutoRotating, setIsAutoRotating, activeModal, setActiveModal,
+      resetWorkspace,
       planningMode, setPlanningMode, planningObjects, setPlanningObjects, planningPointsPicked,
       planningGroups, setPlanningGroups,
       measurement,
+      flyThroughState, startFlyThrough, pauseFlyThrough, resumeFlyThrough, stopFlyThrough,
+      setFlyThroughProgress, stepFlyThroughDistance, setFlyThroughSpeed, setFlyThroughDirection, setFlyThroughLoop,
+      setFlyThroughFov, setFlyThroughReticle, setFlyThroughLookTrim, setFlyThroughPathOffset, generateSampleAnatomicalCurve,
+      splineClippingState, startSplineClipping, stopSplineClipping,
+      setSplineClippingProgress, setSplineClippingDistance, stepSplineClippingDistance,
+      setSplineClippingInvert,
+      setSplineClippingAlignCamera, zoomSplineCrossSection, setSplineClippingZoomLevel,
       backgroundImage, setBackgroundImage, backgroundOpacity, setBackgroundOpacity,
       isTransformActive, transformMode, activeTransformObjectId,
       setContainerRef, setRulerRefs

@@ -5,6 +5,37 @@ declare global {
   }
 }
 
+export interface FlyThroughState {
+  active: boolean;
+  isPlaying: boolean;
+  curveId: string | null;
+  curveName: string | null;
+  progress: number;
+  speed: number;
+  direction: 1 | -1;
+  loop: boolean;
+  fov: number;
+  showReticle: boolean;
+  totalDistance: number;
+  currentDistance: number;
+  yawOffset: number;
+  pitchOffset: number;
+  pathOffsetX: number;
+  pathOffsetY: number;
+}
+
+export interface SplineClippingState {
+  active: boolean;
+  curveId: string | null;
+  curveName: string | null;
+  progress: number;
+  totalDistance: number;
+  currentDistance: number;
+  invert: boolean;
+  alignCamera: boolean;
+  zoomLevel: number;
+}
+
 export interface ViewerManagerConfig {
   onStatusChange: (status: string, isEmpty: boolean, filename?: string, url?: string | null) => void;
   onProgressChange?: (progress: number) => void;
@@ -16,6 +47,18 @@ export interface ViewerManagerConfig {
   onPlanningGroupsChange?: (groups: any[]) => void;
   onTransformActiveChange?: (active: boolean, objId?: string) => void;
   onTransformModeChange?: (mode: string) => void;
+  onFlyThroughStateChange?: (state: FlyThroughState) => void;
+  onSplineClippingStateChange?: (state: SplineClippingState) => void;
+}
+
+function escapeHtml(unsafe: string) {
+    if (typeof unsafe !== 'string') return '';
+    return unsafe
+         .replace(/&/g, "&amp;")
+         .replace(/</g, "&lt;")
+         .replace(/>/g, "&gt;")
+         .replace(/"/g, "&quot;")
+         .replace(/'/g, "&#039;");
 }
 
 export class ViewerManager {
@@ -69,6 +112,50 @@ export class ViewerManager {
   translationBadgeDiv: HTMLDivElement | null = null;
   translationStartPos: any = null;
   translationAxisName: string | null = null;
+
+  // Smart Ghosting / Focus-X-Ray State
+  isGhostingMode: boolean = false;
+  ghostedOriginals: Map<any, { color: number | null, opacity: number, transparent: boolean, depthWrite: boolean, emissive: number | null, map: any, roughness: number | null, metalness: number | null }> = new Map();
+
+  // Curved Anatomical Fly-Through (Virtual Endoscopy / Vessel Probe) State
+  flyThroughState: FlyThroughState = {
+    active: false,
+    isPlaying: false,
+    curveId: null,
+    curveName: null,
+    progress: 0,
+    speed: 1.0,
+    direction: 1,
+    loop: true,
+    fov: 75,
+    showReticle: true,
+    totalDistance: 0,
+    currentDistance: 0,
+    yawOffset: 0,
+    pitchOffset: 0,
+    pathOffsetX: 0,
+    pathOffsetY: 0
+  };
+  preFlyThroughCamera: any = null;
+  preFlyThroughNear: number | null = null;
+  preFlyThroughFov: number | null = null;
+  lastFlyThroughTimestamp: number = 0;
+  flyThroughUpVector: any = null;
+
+  // Curved Spline Cross-Section Clipping State
+  splineClippingState: SplineClippingState = {
+    active: false,
+    curveId: null,
+    curveName: null,
+    progress: 0.5,
+    totalDistance: 0,
+    currentDistance: 0,
+    invert: false,
+    alignCamera: false,
+    zoomLevel: 1.0
+  };
+  splineClipPlane: any = null;
+  preSplineClipCamera: any = null;
 
   // Memory Leak Prevention & Disposal tracking
   isDisposed: boolean = false;
@@ -472,8 +559,158 @@ export class ViewerManager {
     this.tweenCamera(targetCamera, 500);
   }
 
+  resetWorkspace() {
+    // 1. Halt fly-through tour if active
+    if (this.flyThroughState.active) {
+      this.stopFlyThrough();
+    }
+
+    // 2. Clear loaded-model tree builds or parsing polling intervals
+    if (this.treeParseInterval) {
+      clearInterval(this.treeParseInterval);
+      this.treeParseInterval = null;
+    }
+
+    // 3. Detach & dispose TransformControls and visual cues
+    this.clearRotationVisualCue();
+    this.clearTranslationVisualCue();
+    if (this.transformControl) {
+      try {
+        this.transformControl.detach();
+      } catch (e) {}
+    }
+    this.highlightPlanningMesh(null);
+    if (this.config.onTransformActiveChange) {
+      this.config.onTransformActiveChange(false, null);
+    }
+
+    // 4. Clear all custom planning objects, points, labels, and groups
+    try {
+      this.clearAllPlanningObjects(false);
+      this.clearPlanningPoints();
+    } catch (e) {
+      console.warn("Disposal of planning items failed:", e);
+    }
+    this.planningGroups = [];
+    this.notifyGroupsChanged();
+
+    // 5. Remove persisted localStorage planning objects for the current model
+    try {
+      if (this.loadedFilename) {
+        localStorage.removeItem(`3dpo_planning_objects_${this.loadedFilename}`);
+        localStorage.removeItem(`3dpo_planning_groups_${this.loadedFilename}`);
+      }
+      Object.keys(localStorage).forEach((k) => {
+        if (k.startsWith('3dpo_planning_')) {
+          localStorage.removeItem(k);
+        }
+      });
+    } catch (e) {}
+
+    // 6. Revert ghosting mode, clear highlights, reset explode
+    this.revertGhostingMode();
+    this.clearHighlight();
+    this.originalColors.clear();
+    this.ghostedOriginals.clear();
+    this.currentMeshes = [];
+    this.defaultCamera = null;
+    this.lastPlanesState = null;
+    this.modelBBox = null;
+    this.lastCameraState = '';
+    this.setAutoRotate(false);
+
+    // 7. Clear general WebGL model in embedded viewer
+    if (this.viewer) {
+      try {
+        if (typeof this.viewer.Clear === 'function') {
+          this.viewer.Clear();
+        }
+      } catch (e) {
+        console.warn("Failed clearing embedded 3d viewer core", e);
+      }
+      
+      // Remove any lingering custom objects from scene
+      try {
+        const scene = this.viewer.viewer?.scene || this.viewer.viewer?.mainScene;
+        if (scene) {
+          const customObjects: any[] = [];
+          scene.traverse((child: any) => {
+            if (this.isCustomOverlay(child)) {
+              customObjects.push(child);
+            }
+          });
+          customObjects.forEach((obj) => {
+            try {
+              scene.remove(obj);
+              if (obj.geometry && typeof obj.geometry.dispose === 'function') obj.geometry.dispose();
+              if (obj.material) {
+                const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+                mats.forEach((m: any) => { if (m && typeof m.dispose === 'function') m.dispose(); });
+              }
+            } catch (e) {}
+          });
+        }
+      } catch (e) {}
+
+      // Re-apply clean theme background & render empty scene
+      try {
+        this.setTheme(this.theme, false);
+        this.enforceFreeOrbit();
+        if (this.viewer.viewer) {
+          this.viewer.viewer.Render();
+        }
+      } catch (e) {}
+    }
+
+    // 8. Clear ruler canvases
+    if (this.topRulerRef && this.leftRulerRef) {
+      const topCtx = this.topRulerRef.getContext('2d');
+      if (topCtx) topCtx.clearRect(0, 0, this.topRulerRef.width, this.topRulerRef.height);
+      const leftCtx = this.leftRulerRef.getContext('2d');
+      if (leftCtx) leftCtx.clearRect(0, 0, this.leftRulerRef.width, this.leftRulerRef.height);
+    }
+
+    // 9. Reset tracking flags and notify callbacks
+    this.loadedFilename = null;
+    this.loadedUrl = null;
+
+    this.config.onStatusChange('No model loaded.\nPlease open a file.', true, null, null);
+    if (this.config.onProgressChange) this.config.onProgressChange(0);
+    if (this.config.onMeshesChange) this.config.onMeshesChange([]);
+    if (this.config.onMeshHighlighted) this.config.onMeshHighlighted(null);
+    if (this.config.onPlanningObjectsChange) this.config.onPlanningObjectsChange([]);
+    if (this.config.onPlanningGroupsChange) this.config.onPlanningGroupsChange([]);
+    if (this.config.onPlanningPointsChange) this.config.onPlanningPointsChange(0);
+    if (this.config.onMeasurementChange) this.config.onMeasurementChange(null);
+    this.flyThroughState = {
+      active: false,
+      isPlaying: false,
+      curveId: null,
+      curveName: null,
+      progress: 0,
+      speed: 1.0,
+      direction: 1,
+      loop: true,
+      fov: 75,
+      showReticle: true,
+      totalDistance: 0,
+      currentDistance: 0,
+      yawOffset: 0,
+      pitchOffset: 0,
+      pathOffsetX: 0,
+      pathOffsetY: 0
+    };
+    if (this.config.onFlyThroughStateChange) {
+      this.config.onFlyThroughStateChange({ ...this.flyThroughState });
+    }
+  }
+
   dispose() {
     this.isDisposed = true;
+
+    if (this.flyThroughState.active) {
+      this.stopFlyThrough();
+    }
 
     // 1. Clear loaded-model tree builds or parsing polling intervals
     if (this.treeParseInterval) {
@@ -536,7 +773,9 @@ export class ViewerManager {
     }
 
     // 6.6 Clear cached color maps, meshes, and references
+    this.revertGhostingMode();
     this.originalColors.clear();
+    this.ghostedOriginals.clear();
     this.currentMeshes = [];
     this.defaultCamera = null;
     this.lastPlanesState = null;
@@ -844,6 +1083,7 @@ export class ViewerManager {
 
   loadFiles(files: FileList | File[]) {
     if (!files || files.length === 0) return;
+    this.resetWorkspace();
     this.loadedUrl = null;
     const fileArray = Array.from(files);
     const filename = fileArray[0].name;
@@ -863,6 +1103,7 @@ export class ViewerManager {
       console.log("Model URL is already loaded or in progress of being loaded:", url);
       return;
     }
+    this.resetWorkspace();
     this.loadedUrl = url;
     const filename = url.split('/').pop()?.split('?')[0] || 'Remote Model';
 
@@ -985,8 +1226,10 @@ export class ViewerManager {
   }
 
   buildModelTree() {
+    this.revertGhostingMode();
     this.clearHighlight();
     this.originalColors.clear();
+    this.ghostedOriginals.clear();
     this.currentMeshes = [];
 
     const scene = this.viewer?.viewer?.scene || this.viewer?.viewer?.mainScene;
@@ -1196,10 +1439,12 @@ export class ViewerManager {
                             } else {
                                 this.transformControl.attach(hitPlanningMesh);
                                 this.highlightPlanningMesh(hitObj);
+                                if (this.config.onTransformActiveChange) this.config.onTransformActiveChange(true, hitObjId);
                             }
                         } else {
                             this.transformControl.detach(); // Hide transform handles
-                            this.highlightPlanningMesh(null);
+                            this.highlightPlanningMesh(hitObj || null);
+                            if (this.config.onTransformActiveChange) this.config.onTransformActiveChange(true, hitObjId);
                         }
                         this.viewer.viewer.Render();
                     }
@@ -1397,7 +1642,7 @@ export class ViewerManager {
 
     // --- Update 2D Floating DOM Badge ---
     if (this.rotationBadgeDiv) {
-      const objLabel = planObj.name ? `${planObj.name} • ` : '';
+      const objLabel = planObj.name ? `${escapeHtml(planObj.name)} • ` : '';
       const formattedAngle = `${angleDeg >= 0 ? '+' : ''}${angleDeg.toFixed(1)}°`;
       
       this.rotationBadgeDiv.className = `absolute z-50 pointer-events-none font-mono text-xs font-bold text-white bg-slate-900/90 border ${borderColorCss} rounded-full px-3 py-1.5 shadow-2xl backdrop-blur-md flex items-center gap-2 transition-opacity whitespace-nowrap tracking-tight select-none`;
@@ -1678,7 +1923,7 @@ export class ViewerManager {
 
     // --- Update 2D Floating DOM Badge ---
     if (this.translationBadgeDiv) {
-      const objLabel = planObj.name ? `${planObj.name} • ` : '';
+      const objLabel = planObj.name ? `${escapeHtml(planObj.name)} • ` : '';
       
       this.translationBadgeDiv.className = `absolute z-50 pointer-events-none font-mono text-xs font-bold text-white bg-slate-900/90 border ${borderColorCss} rounded-full px-3 py-1.5 shadow-2xl backdrop-blur-md flex items-center gap-2 transition-opacity whitespace-nowrap tracking-tight select-none`;
       this.translationBadgeDiv.innerHTML = `
@@ -2644,6 +2889,821 @@ export class ViewerManager {
           this.config.onPlanningObjectsChange(this.planningObjects);
       }
       this.saveToLocalStorage();
+  }
+
+  // --- Curved Anatomical Fly-Through (Virtual Endoscopy / Vessel Probe) ---
+
+  getCurves(): any[] {
+    return (this.planningObjects || []).filter(o => o.type === 'curve');
+  }
+
+  startFlyThrough(curveId?: string, autoPlay: boolean = false): boolean {
+    if (!window.THREE || !this.viewer?.viewer?.navigation) return false;
+    const curves = this.getCurves();
+    if (curves.length === 0) return false;
+
+    const target = curveId ? curves.find(c => c.id === curveId) : curves[0];
+    if (!target) return false;
+
+    // Ensure CatmullRomCurve3 is constructed
+    if (!target.curvePath && target.points && target.points.length >= 2) {
+      const pts = target.points.map((p: any) => new window.THREE.Vector3(p.x, p.y, p.z));
+      target.curvePath = new window.THREE.CatmullRomCurve3(pts);
+    }
+    if (!target.curvePath) return false;
+
+    const nav = this.viewer.viewer.navigation;
+    if (!this.flyThroughState.active) {
+      // Save current camera for clean restoration on exit
+      if (typeof nav.GetCamera === 'function') {
+        this.preFlyThroughCamera = nav.GetCamera();
+      } else if (nav.camera) {
+        const threeCam = nav.camera;
+        this.preFlyThroughCamera = new window.OV.Camera(
+          new window.OV.Coord3D(threeCam.position.x, threeCam.position.y, threeCam.position.z),
+          new window.OV.Coord3D(nav.controls?.target?.x || 0, nav.controls?.target?.y || 0, nav.controls?.target?.z || 0),
+          new window.OV.Coord3D(threeCam.up.x, threeCam.up.y, threeCam.up.z),
+          threeCam.fov || 45.0
+        );
+      }
+      const threeCamera = this.viewer?.viewer?.camera || this.viewer?.viewer?.navigation?.camera;
+      if (threeCamera) {
+        if (typeof threeCamera.fov === 'number') {
+          this.preFlyThroughFov = threeCamera.fov;
+        }
+        if (typeof threeCamera.near === 'number') {
+          this.preFlyThroughNear = threeCamera.near;
+          threeCamera.near = 0.05;
+        }
+        if (typeof threeCamera.updateProjectionMatrix === 'function') {
+          try { threeCamera.updateProjectionMatrix(); } catch(e) {}
+        }
+      }
+    }
+
+    const totalDistance = target.curvePath.getLength() || target.baseDistance || 100;
+    this.flyThroughState = {
+      ...this.flyThroughState,
+      active: true,
+      isPlaying: autoPlay, // user request: don't automatically start playing when changed to virtual endoscopy
+      curveId: target.id,
+      curveName: target.name || target.id,
+      totalDistance: totalDistance,
+      currentDistance: this.flyThroughState.progress * totalDistance,
+    };
+    this.flyThroughUpVector = null;
+    this.lastFlyThroughTimestamp = performance.now();
+
+    this.updateFlyThroughCamera();
+    if (this.config.onFlyThroughStateChange) {
+      this.config.onFlyThroughStateChange({ ...this.flyThroughState });
+    }
+    return true;
+  }
+
+  pauseFlyThrough() {
+    this.flyThroughState.isPlaying = false;
+    if (this.config.onFlyThroughStateChange) {
+      this.config.onFlyThroughStateChange({ ...this.flyThroughState });
+    }
+  }
+
+  resumeFlyThrough() {
+    if (!this.flyThroughState.active) {
+      this.startFlyThrough(this.flyThroughState.curveId || undefined);
+      return;
+    }
+    this.flyThroughState.isPlaying = true;
+    this.lastFlyThroughTimestamp = performance.now();
+    if (this.config.onFlyThroughStateChange) {
+      this.config.onFlyThroughStateChange({ ...this.flyThroughState });
+    }
+  }
+
+  stopFlyThrough() {
+    this.flyThroughState.active = false;
+    this.flyThroughState.isPlaying = false;
+
+    if (this.preFlyThroughCamera && this.viewer?.viewer?.navigation) {
+      this.viewer.viewer.navigation.SetCamera(this.preFlyThroughCamera);
+      const threeCamera = this.viewer?.viewer?.camera || this.viewer?.viewer?.navigation?.camera;
+      if (threeCamera) {
+        if (this.preFlyThroughFov !== null && typeof threeCamera.fov === 'number') {
+          threeCamera.fov = this.preFlyThroughFov;
+        }
+        if (this.preFlyThroughNear !== null && typeof threeCamera.near === 'number') {
+          threeCamera.near = this.preFlyThroughNear;
+        }
+        if (typeof threeCamera.updateProjectionMatrix === 'function') {
+          try { threeCamera.updateProjectionMatrix(); } catch(e) {}
+        }
+      }
+      if (this.viewer?.viewer) {
+        try { this.viewer.viewer.Render(); } catch(e) {}
+      }
+    }
+    this.preFlyThroughCamera = null;
+    this.preFlyThroughNear = null;
+    this.preFlyThroughFov = null;
+    this.flyThroughUpVector = null;
+
+    if (this.config.onFlyThroughStateChange) {
+      this.config.onFlyThroughStateChange({ ...this.flyThroughState });
+    }
+  }
+
+  setFlyThroughProgress(prog: number) {
+    this.flyThroughState.progress = Math.max(0, Math.min(1, prog));
+    this.flyThroughState.currentDistance = this.flyThroughState.progress * (this.flyThroughState.totalDistance || 100);
+    this.updateFlyThroughCamera();
+    if (this.config.onFlyThroughStateChange) {
+      this.config.onFlyThroughStateChange({ ...this.flyThroughState });
+    }
+  }
+
+  stepFlyThroughDistance(deltaMm: number) {
+    if (!this.flyThroughState.active) return;
+    const totalDist = Math.max(0.6, this.flyThroughState.totalDistance || 100);
+    const deltaProgress = deltaMm / totalDist;
+    const newProgress = Math.max(0.0, Math.min(1.0, this.flyThroughState.progress + deltaProgress));
+    this.setFlyThroughProgress(newProgress);
+  }
+
+  setFlyThroughSpeed(speed: number) {
+    this.flyThroughState.speed = speed;
+    if (this.config.onFlyThroughStateChange) {
+      this.config.onFlyThroughStateChange({ ...this.flyThroughState });
+    }
+  }
+
+  setFlyThroughDirection(dir: 1 | -1) {
+    this.flyThroughState.direction = dir;
+    if (this.config.onFlyThroughStateChange) {
+      this.config.onFlyThroughStateChange({ ...this.flyThroughState });
+    }
+  }
+
+  setFlyThroughLoop(loop: boolean) {
+    this.flyThroughState.loop = loop;
+    if (this.config.onFlyThroughStateChange) {
+      this.config.onFlyThroughStateChange({ ...this.flyThroughState });
+    }
+  }
+
+  setFlyThroughFov(fov: number) {
+    this.flyThroughState.fov = fov;
+    this.updateFlyThroughCamera();
+    if (this.viewer?.viewer) {
+      try { this.viewer.viewer.Render(); } catch(e) {}
+    }
+    if (this.config.onFlyThroughStateChange) {
+      this.config.onFlyThroughStateChange({ ...this.flyThroughState });
+    }
+  }
+
+  setFlyThroughReticle(show: boolean) {
+    this.flyThroughState.showReticle = show;
+    if (this.config.onFlyThroughStateChange) {
+      this.config.onFlyThroughStateChange({ ...this.flyThroughState });
+    }
+  }
+
+  setFlyThroughLookTrim(yaw: number, pitch: number) {
+    this.flyThroughState.yawOffset = yaw;
+    this.flyThroughState.pitchOffset = pitch;
+    this.updateFlyThroughCamera();
+    if (this.config.onFlyThroughStateChange) {
+      this.config.onFlyThroughStateChange({ ...this.flyThroughState });
+    }
+  }
+
+  setFlyThroughPathOffset(offsetX: number, offsetY: number) {
+    this.flyThroughState.pathOffsetX = offsetX;
+    this.flyThroughState.pathOffsetY = offsetY;
+    this.updateFlyThroughCamera();
+    if (this.config.onFlyThroughStateChange) {
+      this.config.onFlyThroughStateChange({ ...this.flyThroughState });
+    }
+  }
+
+  updateFlyThroughCamera() {
+    if (!this.flyThroughState.active || !this.viewer?.viewer?.navigation || !window.THREE || !window.OV) return;
+    const curveObj = this.planningObjects.find(o => o.id === this.flyThroughState.curveId && o.type === 'curve');
+    if (!curveObj || !curveObj.curvePath) return;
+
+    const THREE = window.THREE;
+    const curve = curveObj.curvePath;
+    const t = Math.max(0.0001, Math.min(0.9999, this.flyThroughState.progress));
+
+    const point = curve.getPointAt(t);
+    const rawTangent = curve.getTangentAt(t).normalize();
+    const dir = this.flyThroughState.direction;
+    let forward = rawTangent.clone().multiplyScalar(dir);
+
+    // Apply look trim (yaw and pitch inspection)
+    if (this.flyThroughState.yawOffset !== 0 || this.flyThroughState.pitchOffset !== 0) {
+      const tempUp = this.flyThroughUpVector || new THREE.Vector3(0, 1, 0);
+      const right = new THREE.Vector3().crossVectors(forward, tempUp).normalize();
+      if (this.flyThroughState.yawOffset !== 0) {
+        forward.applyAxisAngle(tempUp, this.flyThroughState.yawOffset);
+      }
+      if (this.flyThroughState.pitchOffset !== 0) {
+        forward.applyAxisAngle(right, this.flyThroughState.pitchOffset);
+      }
+      forward.normalize();
+    }
+
+    // Parallel transport up-vector calculation to prevent gimbal lock
+    let currentUp = this.flyThroughUpVector ? this.flyThroughUpVector.clone() : new THREE.Vector3(0, 1, 0);
+    let right = new THREE.Vector3().crossVectors(forward, currentUp);
+    if (right.lengthSq() < 0.0001) {
+      const alt = Math.abs(forward.y) > 0.9 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0);
+      right = new THREE.Vector3().crossVectors(forward, alt);
+    }
+    right.normalize();
+    const correctedUp = new THREE.Vector3().crossVectors(right, forward).normalize();
+    this.flyThroughUpVector = correctedUp;
+
+    // Apply path offset from 3D spline curve (lateral and vertical/elevation offset)
+    const offX = this.flyThroughState.pathOffsetX || 0;
+    const offY = this.flyThroughState.pathOffsetY || 0;
+    const eyePoint = point.clone();
+    if (offX !== 0) {
+      eyePoint.addScaledVector(right, offX);
+    }
+    if (offY !== 0) {
+      eyePoint.addScaledVector(correctedUp, offY);
+    }
+
+    // Adaptive look ahead distance based on curve length
+    const totalDist = this.flyThroughState.totalDistance || 100;
+    const lookDistance = Math.max(1.5, Math.min(20.0, totalDist * 0.04));
+    const targetPoint = new THREE.Vector3().copy(eyePoint).addScaledVector(forward, lookDistance);
+
+    const nav = this.viewer.viewer.navigation;
+    const currentFov = this.flyThroughState.fov || 75.0;
+    const camera = new window.OV.Camera(
+      new window.OV.Coord3D(eyePoint.x, eyePoint.y, eyePoint.z),
+      new window.OV.Coord3D(targetPoint.x, targetPoint.y, targetPoint.z),
+      new window.OV.Coord3D(correctedUp.x, correctedUp.y, correctedUp.z),
+      currentFov
+    );
+    nav.SetCamera(camera);
+
+    const threeCamera = this.viewer?.viewer?.camera || this.viewer?.viewer?.navigation?.camera;
+    if (threeCamera) {
+      if (typeof threeCamera.fov === 'number') {
+        threeCamera.fov = currentFov;
+      }
+      if (typeof threeCamera.near === 'number') {
+        threeCamera.near = 0.05;
+      }
+      if (typeof threeCamera.updateProjectionMatrix === 'function') {
+        try { threeCamera.updateProjectionMatrix(); } catch(e) {}
+      }
+    }
+
+    if (this.viewer?.viewer) {
+      try { this.viewer.viewer.Render(); } catch(e) {}
+    }
+  }
+
+  // --- Curved Spline Cross-Section Clipping (Anatomical Orthogonal Reslice) ---
+
+  startSplineClipping(curveId?: string): boolean {
+    if (!window.THREE || !this.viewer?.viewer?.navigation) return false;
+    const curves = this.getCurves();
+    if (curves.length === 0) return false;
+
+    const target = curveId ? curves.find(c => c.id === curveId) : curves[0];
+    if (!target || !target.curvePath) return false;
+
+    // If virtual endoscopy is active, exit it cleanly first
+    if (this.flyThroughState.active) {
+      this.stopFlyThrough();
+    }
+
+    if (this.viewer?.viewer?.navigation?.GetCamera) {
+      this.preSplineClipCamera = this.viewer.viewer.navigation.GetCamera();
+    }
+
+    const totalLength = target.curvePath.getLength();
+    this.splineClippingState.active = true;
+    this.splineClippingState.curveId = target.id;
+    this.splineClippingState.curveName = target.name || 'Spline Path';
+    this.splineClippingState.totalDistance = totalLength;
+    this.splineClippingState.currentDistance = totalLength * this.splineClippingState.progress;
+
+    if (this.viewer?.viewer?.renderer) {
+      this.viewer.viewer.renderer.localClippingEnabled = true;
+    }
+
+    this.updateSplineClipping();
+    this.focusOnSplineCrossSection();
+
+    if (this.config.onSplineClippingStateChange) {
+      this.config.onSplineClippingStateChange({ ...this.splineClippingState });
+    }
+    return true;
+  }
+
+  stopSplineClipping() {
+    this.splineClippingState.active = false;
+
+    // Remove clipping planes from meshes
+    this.currentMeshes.forEach(mesh => {
+      if (mesh.material) {
+        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        materials.forEach((mat: any) => {
+          mat.clippingPlanes = null;
+          mat.needsUpdate = true;
+        });
+      }
+    });
+
+    if (this.preSplineClipCamera && this.viewer?.viewer?.navigation) {
+      try {
+        this.viewer.viewer.navigation.SetCamera(this.preSplineClipCamera);
+      } catch(e) {}
+      this.preSplineClipCamera = null;
+    }
+
+    if (this.lastPlanesState) {
+      this.updateClippingPlanes(this.lastPlanesState);
+    }
+
+    if (this.viewer?.viewer) {
+      try { this.viewer.viewer.Render(); } catch(e) {}
+    }
+
+    if (this.config.onSplineClippingStateChange) {
+      this.config.onSplineClippingStateChange({ ...this.splineClippingState });
+    }
+  }
+
+  setSplineClippingProgress(progress: number, snapToInterval: boolean = true) {
+    let p = Math.max(0.0001, Math.min(0.9999, progress));
+    const totalDist = this.splineClippingState.totalDistance || 100;
+    
+    if (snapToInterval && totalDist > 0) {
+      const intervalMm = 0.6;
+      const currentDist = p * totalDist;
+      const snappedDist = Math.max(0, Math.min(totalDist, Math.round(currentDist / intervalMm) * intervalMm));
+      p = Math.max(0.0001, Math.min(0.9999, snappedDist / totalDist));
+      this.splineClippingState.currentDistance = snappedDist;
+    } else {
+      this.splineClippingState.currentDistance = p * totalDist;
+    }
+
+    this.splineClippingState.progress = p;
+    this.updateSplineClipping();
+
+    if (this.splineClippingState.alignCamera) {
+      this.alignCameraToSplineCrossSection();
+    } else {
+      this.focusOnSplineCrossSection();
+    }
+
+    if (this.config.onSplineClippingStateChange) {
+      this.config.onSplineClippingStateChange({ ...this.splineClippingState });
+    }
+  }
+
+  setSplineClippingDistance(distMm: number) {
+    const totalDist = this.splineClippingState.totalDistance || 100;
+    const intervalMm = 0.6;
+    const clampedDist = Math.max(0, Math.min(totalDist, distMm));
+    const snappedDist = Math.round(clampedDist / intervalMm) * intervalMm;
+    const p = totalDist > 0 ? Math.max(0.0001, Math.min(0.9999, snappedDist / totalDist)) : 0.5;
+    
+    this.splineClippingState.progress = p;
+    this.splineClippingState.currentDistance = snappedDist;
+    this.updateSplineClipping();
+
+    if (this.splineClippingState.alignCamera) {
+      this.alignCameraToSplineCrossSection();
+    } else {
+      this.focusOnSplineCrossSection();
+    }
+
+    if (this.config.onSplineClippingStateChange) {
+      this.config.onSplineClippingStateChange({ ...this.splineClippingState });
+    }
+  }
+
+  stepSplineClippingDistance(deltaMm: number = 0.6) {
+    const currentDist = this.splineClippingState.currentDistance !== undefined 
+      ? this.splineClippingState.currentDistance 
+      : (this.splineClippingState.progress * (this.splineClippingState.totalDistance || 100));
+    this.setSplineClippingDistance(currentDist + deltaMm);
+  }
+
+  setSplineClippingInvert(invert: boolean) {
+    this.splineClippingState.invert = invert;
+    this.updateSplineClipping();
+    if (this.splineClippingState.alignCamera) {
+      this.alignCameraToSplineCrossSection();
+    }
+    if (this.config.onSplineClippingStateChange) {
+      this.config.onSplineClippingStateChange({ ...this.splineClippingState });
+    }
+  }
+
+  setSplineClippingAlignCamera(align: boolean) {
+    this.splineClippingState.alignCamera = align;
+    if (align) {
+      this.alignCameraToSplineCrossSection();
+    }
+    if (this.config.onSplineClippingStateChange) {
+      this.config.onSplineClippingStateChange({ ...this.splineClippingState });
+    }
+  }
+
+  zoomSplineCrossSection(action: 'in' | 'out' | number) {
+    if (!this.viewer?.viewer?.navigation || !window.OV || !window.THREE) return;
+    const nav = this.viewer.viewer.navigation;
+    const THREE = window.THREE;
+    const cam = typeof nav.GetCamera === 'function' ? nav.GetCamera() : null;
+    if (!cam) return;
+
+    const curveObj = this.planningObjects.find(o => o.id === this.splineClippingState.curveId && o.type === 'curve');
+    let targetPoint: any = null;
+    if (curveObj && curveObj.curvePath) {
+      targetPoint = curveObj.curvePath.getPointAt(this.splineClippingState.progress);
+    }
+
+    let factor = 1.0;
+    if (action === 'in') {
+      factor = 0.8;
+    } else if (action === 'out') {
+      factor = 1.25;
+    } else if (typeof action === 'number') {
+      factor = action;
+    }
+
+    const eyeVec = new THREE.Vector3(cam.eye.x, cam.eye.y, cam.eye.z);
+    const centerVec = targetPoint 
+      ? new THREE.Vector3(targetPoint.x, targetPoint.y, targetPoint.z) 
+      : new THREE.Vector3(cam.center.x, cam.center.y, cam.center.z);
+
+    const dir = new THREE.Vector3().subVectors(eyeVec, centerVec);
+    const currentDist = dir.length();
+    
+    const newDist = Math.max(6, Math.min(2500, currentDist * factor));
+    dir.normalize().multiplyScalar(newDist);
+    const newEye = new THREE.Vector3().addVectors(centerVec, dir);
+
+    nav.SetCamera(new window.OV.Camera(
+      new window.OV.Coord3D(newEye.x, newEye.y, newEye.z),
+      new window.OV.Coord3D(centerVec.x, centerVec.y, centerVec.z),
+      cam.up,
+      cam.fov
+    ));
+
+    let baseDist = 150;
+    if (this.modelBBox && !this.modelBBox.isEmpty()) {
+      const size = new THREE.Vector3();
+      this.modelBBox.getSize(size);
+      baseDist = Math.max(size.x, size.y, size.z);
+    }
+    this.splineClippingState.zoomLevel = Math.max(0.2, Math.min(5.0, baseDist / Math.max(newDist, 1)));
+
+    if (this.viewer?.viewer) {
+      try { this.viewer.viewer.Render(); } catch(e) {}
+    }
+
+    if (this.config.onSplineClippingStateChange) {
+      this.config.onSplineClippingStateChange({ ...this.splineClippingState });
+    }
+  }
+
+  setSplineClippingZoomLevel(level: number) {
+    if (!this.viewer?.viewer?.navigation || !window.OV || !window.THREE) return;
+    const nav = this.viewer.viewer.navigation;
+    const THREE = window.THREE;
+    const cam = typeof nav.GetCamera === 'function' ? nav.GetCamera() : null;
+    if (!cam) return;
+
+    const curveObj = this.planningObjects.find(o => o.id === this.splineClippingState.curveId && o.type === 'curve');
+    let targetPoint: any = null;
+    if (curveObj && curveObj.curvePath) {
+      targetPoint = curveObj.curvePath.getPointAt(this.splineClippingState.progress);
+    }
+
+    const centerVec = targetPoint 
+      ? new THREE.Vector3(targetPoint.x, targetPoint.y, targetPoint.z) 
+      : new THREE.Vector3(cam.center.x, cam.center.y, cam.center.z);
+
+    const eyeVec = new THREE.Vector3(cam.eye.x, cam.eye.y, cam.eye.z);
+    const dir = new THREE.Vector3().subVectors(eyeVec, centerVec).normalize();
+
+    let baseDist = 150;
+    if (this.modelBBox && !this.modelBBox.isEmpty()) {
+      const size = new THREE.Vector3();
+      this.modelBBox.getSize(size);
+      baseDist = Math.max(size.x, size.y, size.z);
+    }
+
+    const targetDist = Math.max(6, Math.min(2500, baseDist / Math.max(0.1, level)));
+    const newEye = new THREE.Vector3().addVectors(centerVec, dir.multiplyScalar(targetDist));
+
+    nav.SetCamera(new window.OV.Camera(
+      new window.OV.Coord3D(newEye.x, newEye.y, newEye.z),
+      new window.OV.Coord3D(centerVec.x, centerVec.y, centerVec.z),
+      cam.up,
+      cam.fov
+    ));
+
+    this.splineClippingState.zoomLevel = level;
+    if (this.config.onSplineClippingStateChange) {
+      this.config.onSplineClippingStateChange({ ...this.splineClippingState });
+    }
+
+    if (this.viewer?.viewer) {
+      try { this.viewer.viewer.Render(); } catch(e) {}
+    }
+  }
+
+  focusOnSplineCrossSection() {
+    if (!this.viewer?.viewer?.navigation || !window.OV || !window.THREE) return;
+    const nav = this.viewer.viewer.navigation;
+    const THREE = window.THREE;
+    const curveObj = this.planningObjects.find(o => o.id === this.splineClippingState.curveId && o.type === 'curve');
+    if (!curveObj || !curveObj.curvePath) return;
+
+    const t = Math.max(0.0001, Math.min(0.9999, this.splineClippingState.progress));
+    const point = curveObj.curvePath.getPointAt(t);
+
+    const cam = typeof nav.GetCamera === 'function' ? nav.GetCamera() : null;
+    if (!cam) return;
+
+    const delta = new THREE.Vector3(
+      point.x - cam.center.x,
+      point.y - cam.center.y,
+      point.z - cam.center.z
+    );
+
+    nav.SetCamera(new window.OV.Camera(
+      new window.OV.Coord3D(cam.eye.x + delta.x, cam.eye.y + delta.y, cam.eye.z + delta.z),
+      new window.OV.Coord3D(point.x, point.y, point.z),
+      cam.up,
+      cam.fov
+    ));
+
+    if (this.viewer?.viewer) {
+      try { this.viewer.viewer.Render(); } catch(e) {}
+    }
+  }
+
+  alignCameraToSplineCrossSection() {
+    if (!this.viewer?.viewer?.navigation || !window.OV || !window.THREE) return;
+    const nav = this.viewer.viewer.navigation;
+    const THREE = window.THREE;
+    const curveObj = this.planningObjects.find(o => o.id === this.splineClippingState.curveId && o.type === 'curve');
+    if (!curveObj || !curveObj.curvePath) return;
+
+    const t = Math.max(0.0001, Math.min(0.9999, this.splineClippingState.progress));
+    const point = curveObj.curvePath.getPointAt(t);
+    const tangent = curveObj.curvePath.getTangentAt(t).normalize();
+    const normal = this.splineClippingState.invert ? tangent.clone().negate() : tangent.clone();
+
+    let dist = 120;
+    if (this.modelBBox && !this.modelBBox.isEmpty()) {
+      const size = new THREE.Vector3();
+      this.modelBBox.getSize(size);
+      dist = Math.max(size.x, size.y, size.z) * 0.8;
+    }
+    const currentCam = typeof nav.GetCamera === 'function' ? nav.GetCamera() : null;
+    if (currentCam) {
+      const d = new THREE.Vector3(currentCam.eye.x - currentCam.center.x, currentCam.eye.y - currentCam.center.y, currentCam.eye.z - currentCam.center.z).length();
+      if (d > 10) dist = d;
+    }
+
+    // Invert the view vector so camera looks directly into the exposed cross-section face
+    const viewNormal = normal.clone().negate();
+    const eye = point.clone().add(viewNormal.clone().multiplyScalar(dist));
+    let up = new THREE.Vector3(0, 1, 0);
+    if (Math.abs(viewNormal.y) > 0.88) {
+      up = new THREE.Vector3(0, 0, 1);
+    }
+    const right = new THREE.Vector3().crossVectors(viewNormal, up).normalize();
+    up.crossVectors(right, viewNormal).normalize();
+
+    nav.SetCamera(new window.OV.Camera(
+      new window.OV.Coord3D(eye.x, eye.y, eye.z),
+      new window.OV.Coord3D(point.x, point.y, point.z),
+      new window.OV.Coord3D(up.x, up.y, up.z),
+      currentCam?.fov || 45.0
+    ));
+
+    if (this.viewer?.viewer) {
+      try { this.viewer.viewer.Render(); } catch(e) {}
+    }
+  }
+
+  updateSplineClipping() {
+    if (!this.splineClippingState.active || !window.THREE) return;
+    const curveObj = this.planningObjects.find(o => o.id === this.splineClippingState.curveId && o.type === 'curve');
+    if (!curveObj || !curveObj.curvePath) return;
+
+    const THREE = window.THREE;
+    const curve = curveObj.curvePath;
+    const t = Math.max(0.0001, Math.min(0.9999, this.splineClippingState.progress));
+    const point = curve.getPointAt(t);
+    const tangent = curve.getTangentAt(t).normalize();
+    const normal = this.splineClippingState.invert ? tangent.clone().negate() : tangent.clone();
+
+    if (!this.splineClipPlane) {
+      this.splineClipPlane = new THREE.Plane();
+    }
+    this.splineClipPlane.setFromNormalAndCoplanarPoint(normal, point);
+
+    const activePlanes = [this.splineClipPlane];
+    this.currentMeshes.forEach(mesh => {
+      if (mesh.material) {
+        const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        materials.forEach((mat: any) => {
+          mat.clippingPlanes = activePlanes;
+          mat.clipShadows = true;
+          mat.side = THREE.DoubleSide;
+          mat.needsUpdate = true;
+        });
+      }
+    });
+
+    if (this.viewer?.viewer) {
+      try { this.viewer.viewer.Render(); } catch (e) {}
+    }
+  }
+
+  generateSampleAnatomicalCurve(selectedMeshId?: number | null): string | null {
+    if (!window.THREE) return null;
+    const THREE = window.THREE;
+
+    // 1. Identify target meshes based on user selection or displayed models
+    let targetMeshes: any[] = [];
+    let targetName = 'Model';
+
+    if (selectedMeshId !== undefined && selectedMeshId !== null && this.currentMeshes && this.currentMeshes[selectedMeshId]) {
+      const selectedMesh = this.currentMeshes[selectedMeshId];
+      targetMeshes = [selectedMesh];
+      targetName = selectedMesh.name || `Mesh_${selectedMeshId + 1}`;
+    } else {
+      // Filter displayed (visible) meshes
+      targetMeshes = (this.currentMeshes || []).filter(m => m && m.visible !== false);
+      if (targetMeshes.length === 0) {
+        targetMeshes = this.currentMeshes || [];
+      }
+      targetName = 'Displayed_Model';
+    }
+
+    // Include custom planning models if no currentMeshes
+    if (targetMeshes.length === 0) {
+      const customModels = (this.planningObjects || []).filter(o => o.type === 'custom_model' && o.mesh && o.visible !== false);
+      if (customModels.length > 0) {
+        targetMeshes = customModels.map(o => o.mesh);
+        targetName = 'Custom_Model';
+      }
+    }
+
+    // 2. Compute accurate world-space bounding box of target meshes
+    const targetBox = new THREE.Box3();
+    targetMeshes.forEach(mesh => {
+      try {
+        mesh.updateWorldMatrix(true, false);
+        const meshBox = new THREE.Box3().setFromObject(mesh);
+        if (!meshBox.isEmpty()) {
+          targetBox.union(meshBox);
+        }
+      } catch(e) {}
+    });
+
+    // Fallback if targetBox is still empty: scan scene directly
+    if (targetBox.isEmpty()) {
+      const scene = this.viewer?.viewer?.scene || this.viewer?.viewer?.mainScene;
+      if (scene) {
+        scene.traverse((child: any) => {
+          if (child.isMesh && !this.isCustomOverlay(child)) {
+            try {
+              const b = new THREE.Box3().setFromObject(child);
+              if (!b.isEmpty()) targetBox.union(b);
+            } catch(e) {}
+          }
+        });
+      }
+    }
+
+    let center = new THREE.Vector3(0, 0, 0);
+    let size = new THREE.Vector3(80, 80, 80);
+    let min = new THREE.Vector3(-40, -40, -40);
+
+    if (!targetBox.isEmpty()) {
+      targetBox.getCenter(center);
+      targetBox.getSize(size);
+      min = targetBox.min.clone();
+      if (size.x < 1) size.x = 20;
+      if (size.y < 1) size.y = 20;
+      if (size.z < 1) size.z = 20;
+    }
+
+    // 3. Determine primary anatomical axis of elongation
+    let primaryAxis: 'x' | 'y' | 'z' = 'y';
+    if (size.z >= size.y && size.z >= size.x) primaryAxis = 'z';
+    else if (size.x >= size.y && size.x >= size.z) primaryAxis = 'x';
+    else primaryAxis = 'y';
+
+    // 4. Collect world-space vertices from target meshes to find true anatomical lumen cross-sectional centroids
+    const sampledWorldVertices: any[] = [];
+    targetMeshes.forEach(mesh => {
+      try {
+        const geom = mesh.geometry;
+        if (!geom || !geom.attributes || !geom.attributes.position) return;
+        const posAttr = geom.attributes.position;
+        const count = posAttr.count;
+        if (count === 0) return;
+        // Sample evenly up to 15,000 vertices for instant calculation
+        const step = Math.max(1, Math.floor(count / 15000));
+        const tempV = new THREE.Vector3();
+        for (let i = 0; i < count; i += step) {
+          tempV.fromBufferAttribute(posAttr, i);
+          tempV.applyMatrix4(mesh.matrixWorld);
+          sampledWorldVertices.push(tempV.clone());
+        }
+      } catch(e) {}
+    });
+
+    const points: any[] = [];
+    const numPoints = 8;
+    const minVal = min[primaryAxis];
+    const maxVal = min[primaryAxis] + size[primaryAxis];
+    const span = maxVal - minVal;
+    const bandHalfWidth = (span / (numPoints - 1)) * 0.75;
+
+    for (let i = 0; i < numPoints; i++) {
+      // Stay between 8% and 92% of the structure so the path starts and ends inside the anatomical volume
+      const frac = (i / (numPoints - 1)) * 0.84 + 0.08;
+      const coordOnAxis = minVal + span * frac;
+
+      let pt: any = null;
+
+      if (sampledWorldVertices.length > 20) {
+        let sumX = 0, sumY = 0, sumZ = 0, inSliceCount = 0;
+        for (let j = 0; j < sampledWorldVertices.length; j++) {
+          const v = sampledWorldVertices[j];
+          if (Math.abs(v[primaryAxis] - coordOnAxis) <= bandHalfWidth) {
+            sumX += v.x;
+            sumY += v.y;
+            sumZ += v.z;
+            inSliceCount++;
+          }
+        }
+
+        if (inSliceCount >= 3) {
+          pt = new THREE.Vector3(sumX / inSliceCount, sumY / inSliceCount, sumZ / inSliceCount);
+          pt[primaryAxis] = coordOnAxis; // maintain steady monotonic progression along primary axis
+        }
+      }
+
+      // If vertex sampling yielded insufficient vertices for this slice, use geometric centerline
+      if (!pt) {
+        pt = center.clone();
+        pt[primaryAxis] = coordOnAxis;
+      }
+
+      points.push(pt);
+    }
+
+    // 5. 3-point smoothing filter to prevent any geometric vertex jitter
+    const smoothedPoints: any[] = [];
+    for (let i = 0; i < points.length; i++) {
+      if (i === 0 || i === points.length - 1) {
+        smoothedPoints.push(points[i].clone());
+      } else {
+        const prev = points[i - 1];
+        const curr = points[i];
+        const next = points[i + 1];
+        const smoothed = new THREE.Vector3(
+          prev.x * 0.25 + curr.x * 0.5 + next.x * 0.25,
+          prev.y * 0.25 + curr.y * 0.5 + next.y * 0.25,
+          prev.z * 0.25 + curr.z * 0.5 + next.z * 0.25
+        );
+        smoothed[primaryAxis] = curr[primaryAxis];
+        smoothedPoints.push(smoothed);
+      }
+    }
+
+    this.createPlanningCurve(smoothedPoints, 0.4);
+    const createdCurve = this.planningObjects[this.planningObjects.length - 1];
+    if (createdCurve) {
+      const cleanName = targetName.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 18);
+      createdCurve.name = `Spline_${cleanName}_${this.nextPlanningObjectId - 1}`;
+      if (this.config.onPlanningObjectsChange) {
+        this.config.onPlanningObjectsChange(this.planningObjects);
+      }
+      this.saveToLocalStorage();
+      return createdCurve.id;
+    }
+    return null;
   }
 
   async importCustomPlanningModel(file: File) {
@@ -4713,15 +5773,16 @@ It contains both Slicer markup properties and the application's internal groupin
             const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
             materials.forEach((mat: any) => {
                 if (!this.originalColors.has(mat)) {
+                    const ghostOrig = this.ghostedOriginals.get(mat);
                     this.originalColors.set(mat, {
-                        color: mat.color ? mat.color.getHex() : 0xcccccc,
-                        roughness: mat.roughness !== undefined ? mat.roughness : null,
-                        metalness: mat.metalness !== undefined ? mat.metalness : null,
+                        color: ghostOrig && ghostOrig.color !== null ? ghostOrig.color : (mat.color ? mat.color.getHex() : 0xcccccc),
+                        roughness: ghostOrig && ghostOrig.roughness !== null ? ghostOrig.roughness : (mat.roughness !== undefined ? mat.roughness : null),
+                        metalness: ghostOrig && ghostOrig.metalness !== null ? ghostOrig.metalness : (mat.metalness !== undefined ? mat.metalness : null),
                         shininess: mat.shininess !== undefined ? mat.shininess : null,
                         specular: mat.specular !== undefined && mat.specular.getHex ? mat.specular.getHex() : null,
                         vertexColors: mat.vertexColors !== undefined ? mat.vertexColors : null,
-                        map: mat.map !== undefined ? mat.map : null,
-                        emissive: (mat.emissive !== undefined && mat.emissive.getHex) ? mat.emissive.getHex() : null,
+                        map: ghostOrig && ghostOrig.map !== undefined ? ghostOrig.map : (mat.map !== undefined ? mat.map : null),
+                        emissive: ghostOrig && ghostOrig.emissive !== null ? ghostOrig.emissive : ((mat.emissive !== undefined && mat.emissive.getHex) ? mat.emissive.getHex() : null),
                     });
                 }
                 
@@ -4760,6 +5821,9 @@ It contains both Slicer markup properties and the application's internal groupin
         }
     }
     this.config.onMeshHighlighted(id);
+    if (this.isGhostingMode) {
+        this.applyGhostingMode();
+    }
     if (this.viewer?.viewer) {
         try { this.viewer.viewer.Render(); } catch(e) {}
     }
@@ -4802,6 +5866,95 @@ It contains both Slicer markup properties and the application's internal groupin
           });
           this.highlightedMesh = null;
       }
+      if (this.isGhostingMode) {
+          this.applyGhostingMode();
+      }
+  }
+
+  setGhostingMode(enabled: boolean) {
+    this.isGhostingMode = enabled;
+    if (enabled) {
+      this.applyGhostingMode();
+    } else {
+      this.revertGhostingMode();
+    }
+    if (this.viewer?.viewer) {
+      try { this.viewer.viewer.Render(); } catch(e) {}
+    }
+  }
+
+  applyGhostingMode() {
+    if (!window.THREE || !this.currentMeshes.length) return;
+
+    this.currentMeshes.forEach((mesh, index) => {
+      if (!mesh || !mesh.material) return;
+      const isTarget = this.highlightedMesh ? (mesh === this.highlightedMesh) : true;
+
+      const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      materials.forEach((mat: any) => {
+        if (!isTarget) {
+          // Save original properties once
+          if (!this.ghostedOriginals.has(mat)) {
+            this.ghostedOriginals.set(mat, {
+              color: mat.color ? mat.color.getHex() : null,
+              opacity: mat.opacity !== undefined ? mat.opacity : 1,
+              transparent: !!mat.transparent,
+              depthWrite: mat.depthWrite !== undefined ? mat.depthWrite : true,
+              emissive: (mat.emissive && mat.emissive.getHex) ? mat.emissive.getHex() : null,
+              map: mat.map !== undefined ? mat.map : null,
+              roughness: mat.roughness !== undefined ? mat.roughness : null,
+              metalness: mat.metalness !== undefined ? mat.metalness : null
+            });
+          }
+          // Ghost style: semi-transparent, cyan-tinted x-ray silhouette
+          mat.transparent = true;
+          mat.opacity = 0.18;
+          mat.depthWrite = false;
+          if (mat.color) mat.color.setHex(0x5a8fb4);
+          if (mat.emissive && mat.emissive.setHex) mat.emissive.setHex(0x11283c);
+          mat.needsUpdate = true;
+        } else {
+          // Target structure: restore to solid full opacity or preserve highlight
+          if (this.ghostedOriginals.has(mat)) {
+            const orig = this.ghostedOriginals.get(mat)!;
+            mat.transparent = orig.transparent;
+            mat.opacity = orig.opacity;
+            mat.depthWrite = orig.depthWrite;
+            if (!this.highlightedMesh && orig.color !== null && mat.color) {
+              mat.color.setHex(orig.color);
+            }
+            if (orig.emissive !== null && mat.emissive && mat.emissive.setHex) {
+              mat.emissive.setHex(orig.emissive);
+            }
+            this.ghostedOriginals.delete(mat);
+            mat.needsUpdate = true;
+          }
+        }
+      });
+    });
+  }
+
+  revertGhostingMode() {
+    this.ghostedOriginals.forEach((orig, mat) => {
+      mat.transparent = orig.transparent;
+      mat.opacity = orig.opacity;
+      mat.depthWrite = orig.depthWrite;
+      // If this material is not currently highlighted, restore color and emissive
+      const isCurrentlyHighlighted = this.highlightedMesh && (
+        this.highlightedMesh.material === mat ||
+        (Array.isArray(this.highlightedMesh.material) && this.highlightedMesh.material.includes(mat))
+      );
+      if (!isCurrentlyHighlighted) {
+        if (orig.color !== null && mat.color) {
+          mat.color.setHex(orig.color);
+        }
+        if (orig.emissive !== null && mat.emissive && mat.emissive.setHex) {
+          mat.emissive.setHex(orig.emissive);
+        }
+      }
+      mat.needsUpdate = true;
+    });
+    this.ghostedOriginals.clear();
   }
 
   // --- CLIPPING ---
@@ -4924,6 +6077,7 @@ It contains both Slicer markup properties and the application's internal groupin
             }
         });
     }
+
     try { this.viewer.viewer.Render(); } catch(e) {}
   }
 
@@ -5042,8 +6196,39 @@ It contains both Slicer markup properties and the application's internal groupin
         }
     
         if (this.viewer?.viewer?.navigation) {
-            
-            if (this.isAutoRotating && window.THREE) {
+            if (this.flyThroughState.active && window.THREE) {
+                const now = performance.now();
+                if (this.flyThroughState.isPlaying) {
+                    const dt = Math.min((now - (this.lastFlyThroughTimestamp || now)) / 1000, 0.1);
+                    const totalDist = this.flyThroughState.totalDistance || 100;
+                    const speedMmPerSec = 25 * this.flyThroughState.speed;
+                    const progressDelta = (speedMmPerSec / Math.max(1, totalDist)) * dt * this.flyThroughState.direction;
+
+                    let newProgress = this.flyThroughState.progress + progressDelta;
+                    if (newProgress >= 1.0) {
+                        if (this.flyThroughState.loop) {
+                            newProgress = 0.0;
+                        } else {
+                            newProgress = 1.0;
+                            this.flyThroughState.isPlaying = false;
+                        }
+                    } else if (newProgress <= 0.0) {
+                        if (this.flyThroughState.loop) {
+                            newProgress = 1.0;
+                        } else {
+                            newProgress = 0.0;
+                            this.flyThroughState.isPlaying = false;
+                        }
+                    }
+                    this.flyThroughState.progress = newProgress;
+                    this.flyThroughState.currentDistance = newProgress * totalDist;
+                    this.updateFlyThroughCamera();
+                    if (this.config.onFlyThroughStateChange) {
+                        this.config.onFlyThroughStateChange({ ...this.flyThroughState });
+                    }
+                }
+                this.lastFlyThroughTimestamp = now;
+            } else if (this.isAutoRotating && window.THREE) {
                 const nav = this.viewer.viewer.navigation;
                 let originalCam: any = null;
                 if (typeof nav.GetCamera === 'function') {

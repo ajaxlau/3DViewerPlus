@@ -1,6 +1,8 @@
 import { useEffect, useState, useRef } from 'react';
 import { useViewer } from '../context/ViewerContext';
 import { BoxSelect, Camera, Move, RotateCw, Scaling, Info, Plus, Maximize } from 'lucide-react';
+import { EndoscopyFlyThroughHUD } from './EndoscopyFlyThroughHUD';
+import { SplineClippingHUD } from './SplineClippingHUD';
 
 export function ViewerCanvas() {
   const { 
@@ -233,6 +235,12 @@ export function ViewerCanvas() {
              viewerManager={viewerManager}
           />
       )}
+
+      {/* Curved Anatomical Fly-Through (Virtual Endoscopy) HUD */}
+      <EndoscopyFlyThroughHUD />
+      
+      {/* 3D Spline Clipping HUD */}
+      <SplineClippingHUD />
       
       {/* Rulers Overlay Layer */}
       <div className={`absolute inset-0 z-10 pointer-events-none transition-opacity duration-300 ${rulersVisible ? 'opacity-100' : 'opacity-0'}`}>

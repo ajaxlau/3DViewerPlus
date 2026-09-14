@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react';
 import { useViewer } from '../context/ViewerContext';
 import { QRCodeSVG } from 'qrcode.react';
 import JSZip from 'jszip';
+import { RotateCcw, AlertTriangle } from 'lucide-react';
 
 export function Modals() {
-  const { activeModal, setActiveModal, filename, loadedUrl, isEmpty } = useViewer();
+  const { activeModal, setActiveModal, filename, loadedUrl, isEmpty, resetWorkspace } = useViewer();
 
   // URL Modal state
   const [urlInput, setUrlInput] = useState('');
@@ -263,6 +264,53 @@ export function Modals() {
       <div className="bg-white dark:bg-zinc-900 p-8 rounded-sm shadow-xl outline-none border border-zinc-200 dark:border-zinc-800" 
            style={{ width: activeModal === 'snapshot' ? '750px' : '450px', maxWidth: '100%' }}>
         
+        {/* -- RESET WORKSPACE CONFIRMATION MODAL -- */}
+        {activeModal === 'reset' && (
+          <>
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 dark:bg-red-950/60 flex items-center justify-center text-red-600 dark:text-red-400 shrink-0 border border-red-200 dark:border-red-900/60">
+                <RotateCcw size={20} />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold uppercase tracking-wider text-zinc-800 dark:text-zinc-100">
+                  Reset Workspace
+                </h3>
+                <p className="text-xs text-zinc-500 dark:text-zinc-400 font-mono">
+                  Clear all models & analytic items
+                </p>
+              </div>
+            </div>
+            
+            <div className="bg-red-50/70 dark:bg-red-950/30 border border-red-200/80 dark:border-red-900/40 rounded p-3.5 mb-5 text-xs text-red-900 dark:text-red-200 flex items-start gap-2.5">
+              <AlertTriangle size={16} className="shrink-0 text-red-600 dark:text-red-400 mt-0.5" />
+              <div className="leading-relaxed">
+                <strong>Confirm Workspace Reset:</strong> This will clear all loaded 3D models, custom anatomical planning items (measurements, planes, cylinders, curves), and restore the viewer to its initial clean state.
+              </div>
+            </div>
+
+            <div className="flex justify-end items-center gap-3">
+              <button 
+                type="button"
+                className="px-5 py-2.5 rounded-sm text-xs font-bold uppercase tracking-widest border border-zinc-300 dark:border-zinc-700 bg-transparent text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition" 
+                onClick={() => setActiveModal(null)}
+              >
+                Cancel
+              </button>
+              <button 
+                type="button"
+                className="px-5 py-2.5 rounded-sm text-xs font-bold uppercase tracking-widest bg-red-600 hover:bg-red-700 active:scale-95 text-white border-none shadow-sm transition flex items-center gap-2" 
+                onClick={() => {
+                  resetWorkspace();
+                  setActiveModal(null);
+                }}
+              >
+                <RotateCcw size={14} />
+                <span>Reset Workspace</span>
+              </button>
+            </div>
+          </>
+        )}
+
         {/* -- URL MODAL -- */}
         {activeModal === 'url' && (
           <>

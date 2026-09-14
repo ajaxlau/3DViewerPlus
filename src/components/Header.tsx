@@ -1,10 +1,10 @@
-import { Menu, Link, Share2, Camera, Ruler, Moon, Sun, PenTool } from 'lucide-react';
+import { Menu, Link, Share2, Ruler, Moon, Sun, PenTool, Camera, RotateCcw } from 'lucide-react';
 import { useViewer } from '../context/ViewerContext';
 
 export function Header({ toggleSidebar }: { toggleSidebar: () => void }) {
-  const { theme, setTheme, activeModal, setActiveModal, toggleRulers, rulersVisible } = useViewer();
-
-
+  const { 
+    theme, setTheme, activeModal, setActiveModal, toggleRulers, rulersVisible 
+  } = useViewer();
 
   return (
     <header className="h-[64px] bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between px-6 z-10 shrink-0 md:h-[64px] h-auto py-2 md:py-0 flex-col md:flex-row gap-3 md:gap-0">
@@ -15,7 +15,7 @@ export function Header({ toggleSidebar }: { toggleSidebar: () => void }) {
           className="h-6 w-auto max-w-[150px] object-contain mix-blend-multiply dark:mix-blend-screen dark:invert dark:hue-rotate-180" 
         />
         <span className="whitespace-nowrap md:text-[14px] text-xs truncate max-w-[200px] md:max-w-none">
-          NTEC 3DPO - 3D Viewer<sup>+</sup>
+          NTEC 3DPO - Medical 3D Viewer<sup>+</sup>
         </span>
       </div>
       
@@ -31,17 +31,28 @@ export function Header({ toggleSidebar }: { toggleSidebar: () => void }) {
           <Share2 size={18} />
         </button>
         <button 
+          className={`w-8 h-8 rounded shrink-0 flex items-center justify-center transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-blue-600 dark:hover:text-blue-400 ${activeModal === 'snapshot' ? 'text-blue-600 dark:text-blue-400 bg-zinc-100 dark:bg-zinc-800' : ''}`} 
+          onClick={() => setActiveModal(activeModal === 'snapshot' ? null : 'snapshot')} 
+          title="Snapshot & WhatsApp Share"
+        >
+          <Camera size={18} />
+        </button>
+        <button 
           className={`w-8 h-8 rounded shrink-0 flex items-center justify-center transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-blue-600 dark:hover:text-blue-400 ${rulersVisible ? 'text-blue-600 dark:text-blue-400 bg-zinc-100 dark:bg-zinc-800' : ''}`} 
           onClick={toggleRulers} 
           title="Toggle Rulers"
         >
           <Ruler size={18} />
         </button>
-        <button className="w-8 h-8 rounded shrink-0 flex items-center justify-center transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-blue-600 dark:hover:text-blue-400" onClick={() => setActiveModal('snapshot')} title="Create Snapshot">
-          <Camera size={18} />
-        </button>
         <button className="w-8 h-8 rounded shrink-0 flex items-center justify-center transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-blue-600 dark:hover:text-blue-400" onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} title="Toggle Dark Mode">
           {theme === 'light' ? <Moon size={18} /> : <Sun size={18} />}
+        </button>
+        <button 
+          className={`w-8 h-8 rounded shrink-0 flex items-center justify-center transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-red-600 dark:hover:text-red-400 ${activeModal === 'reset' ? 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40' : ''}`} 
+          onClick={() => setActiveModal(activeModal === 'reset' ? null : 'reset')} 
+          title="Reset Workspace (Clear Models & Analytic Items)"
+        >
+          <RotateCcw size={18} />
         </button>
 
         <button 

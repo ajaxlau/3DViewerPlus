@@ -1,5 +1,5 @@
 import { useViewer } from '../context/ViewerContext';
-import { X, SlidersHorizontal, Download, Trash2, Crosshair, BoxSelect, Ruler, Compass, Plus, Spline, Eye, EyeOff, Folder, FolderPlus, ChevronDown, ChevronRight, FolderOpen, Copy, Upload, Save, GripHorizontal, Waypoints, MapPin, Palette, Droplets } from 'lucide-react';
+import { X, SlidersHorizontal, Download, Trash2, Crosshair, BoxSelect, Ruler, Compass, Plus, Spline, Eye, EyeOff, Folder, FolderPlus, ChevronDown, ChevronRight, FolderOpen, Copy, Upload, Save, GripHorizontal, Waypoints, MapPin, Palette, Droplets, Video, Play, Pause, Sparkles, Navigation } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 
 export function PlanningMenu() {
@@ -606,7 +606,7 @@ export function PlanningMenu() {
 }
 
 function PlanningObjectItem({ obj, viewerManager }: { obj: any, viewerManager: any, key?: any }) {
-  const { planningGroups = [] } = useViewer();
+  const { planningGroups = [], flyThroughState, startFlyThrough, stopFlyThrough } = useViewer();
   const [isColorPickerOpen, setIsColorPickerOpen] = useState(false);
   const [isOpacitySliderOpen, setIsOpacitySliderOpen] = useState(false);
   const [draggable, setDraggable] = useState(false);
@@ -681,7 +681,26 @@ function PlanningObjectItem({ obj, viewerManager }: { obj: any, viewerManager: a
             const target = e.target as HTMLElement;
             if (target.closest('button, input')) return;
             if (viewerManager && typeof viewerManager.highlightPlanningMesh === 'function') {
-                viewerManager.highlightPlanningMesh(viewerManager.highlightedPlanningObj?.id === obj.id ? null : obj);
+                const isSelected = viewerManager.highlightedPlanningObj?.id === obj.id;
+                const newSelection = isSelected ? null : obj;
+                
+                viewerManager.highlightPlanningMesh(newSelection);
+                
+                if (viewerManager.transformControl) {
+                    if (newSelection && (newSelection.type === 'plane' || newSelection.type === 'cylinder' || newSelection.type === 'custom_model')) {
+                        viewerManager.transformControl.attach(newSelection.mesh);
+                    } else {
+                        viewerManager.transformControl.detach();
+                    }
+                }
+                
+                if (viewerManager.config.onTransformActiveChange) {
+                    viewerManager.config.onTransformActiveChange(!!newSelection, newSelection ? newSelection.id : null);
+                }
+                
+                if (viewerManager.viewer && viewerManager.viewer.viewer) {
+                    viewerManager.viewer.viewer.Render();
+                }
             }
         }}
         draggable={draggable}
@@ -825,6 +844,25 @@ function PlanningObjectItem({ obj, viewerManager }: { obj: any, viewerManager: a
                   {(obj.type !== 'measurement' && obj.type !== 'angle') && (
                       <button onClick={() => viewerManager.duplicatePlanningObject(obj.id)} className="p-1.5 text-zinc-500 hover:text-blue-500 dark:text-zinc-400 dark:hover:text-blue-400 rounded hover:bg-white dark:hover:bg-zinc-800 transition" title="Duplicate Object">
                           <Copy size={14} />
+                      </button>
+                  )}
+                  {obj.type === 'curve' && (
+                      <button 
+                          onClick={() => {
+                              if (flyThroughState.active && flyThroughState.curveId === obj.id) {
+                                  stopFlyThrough();
+                              } else {
+                                  startFlyThrough(obj.id, false);
+                              }
+                          }} 
+                          className={`p-1.5 rounded transition ${
+                              flyThroughState.active && flyThroughState.curveId === obj.id
+                                  ? 'text-cyan-600 dark:text-cyan-400 bg-cyan-100 dark:bg-cyan-900/50 ring-1 ring-cyan-500 font-bold'
+                                  : 'text-zinc-500 hover:text-cyan-600 dark:text-zinc-400 dark:hover:text-cyan-400 hover:bg-white dark:hover:bg-zinc-800'
+                          }`} 
+                          title={flyThroughState.active && flyThroughState.curveId === obj.id ? "Stop Fly-Through Mode" : "Start Virtual Endoscopy Fly-Through along this curve"}
+                      >
+                          <Video size={14} />
                       </button>
                   )}
                   <button onClick={() => viewerManager.togglePlanningObjectVisibility(obj.id)} className="p-1.5 text-zinc-500 hover:text-blue-500 dark:text-zinc-400 dark:hover:text-blue-400 rounded hover:bg-white dark:hover:bg-zinc-800 transition" title={obj.visible === false ? "Show Object" : "Hide Object"}>
