@@ -1,7 +1,10 @@
+import { streamFileOrUrl, parseModelBufferDirectly, parseSTLGeometry } from './ModelLoaders';
+
 declare global {
   interface Window {
     OV: any;
     THREE: any;
+    _viewerManagerInstance: any;
   }
 }
 
@@ -216,6 +219,12 @@ export class ViewerManager {
     try {
       if (window.OV && window.OV.SetExternalLibLocation) {
          window.OV.SetExternalLibLocation('https://cdn.jsdelivr.net/npm/online-3d-viewer@latest/build/libs');
+      }
+
+      if (window.OV && window.OV.Viewer && window.OV.Viewer.prototype) {
+         window.OV.Viewer.prototype.UpdateEdges = function() {
+            // Nullified to prevent OOM on 20MB+ models
+         };
       }
       
       const bgColor = this.theme === 'dark' 
@@ -619,7 +628,7 @@ export class ViewerManager {
     this.lastCameraState = '';
     this.setAutoRotate(false);
 
-    // 7. Clear general WebGL model in embedded viewer
+    // 7. Clear general WebGL model in embedded viewer & deeply dispose GPU memory
     if (this.viewer) {
       try {
         if (typeof this.viewer.Clear === 'function') {
@@ -629,24 +638,48 @@ export class ViewerManager {
         console.warn("Failed clearing embedded 3d viewer core", e);
       }
       
-      // Remove any lingering custom objects from scene
+      // Ensure canvas is visible and progress overlay is removed
+      try {
+        if (this.viewer.canvas) {
+          this.viewer.canvas.style.display = 'block';
+        }
+        if (this.viewer.progressDiv && this.viewer.progressDiv.parentNode) {
+          this.viewer.progressDiv.parentNode.removeChild(this.viewer.progressDiv);
+          this.viewer.progressDiv = null;
+        }
+      } catch (e) {}
+
+      // Thoroughly dispose of all geometries, materials, and textures in the Three.js scene
       try {
         const scene = this.viewer.viewer?.scene || this.viewer.viewer?.mainScene;
         if (scene) {
-          const customObjects: any[] = [];
+          const objectsToRemove: any[] = [];
           scene.traverse((child: any) => {
-            if (this.isCustomOverlay(child)) {
-              customObjects.push(child);
+            if (child.isMesh) {
+              if (child.geometry && typeof child.geometry.dispose === 'function') {
+                try { child.geometry.dispose(); } catch(e) {}
+              }
+              if (child.material) {
+                const mats = Array.isArray(child.material) ? child.material : [child.material];
+                mats.forEach((m: any) => {
+                  if (m) {
+                    if (m.map && typeof m.map.dispose === 'function') {
+                      try { m.map.dispose(); } catch(e) {}
+                    }
+                    if (typeof m.dispose === 'function') {
+                      try { m.dispose(); } catch(e) {}
+                    }
+                  }
+                });
+              }
+            }
+            if (this.isCustomOverlay(child) || child.parent === scene) {
+              objectsToRemove.push(child);
             }
           });
-          customObjects.forEach((obj) => {
+          objectsToRemove.forEach((obj) => {
             try {
               scene.remove(obj);
-              if (obj.geometry && typeof obj.geometry.dispose === 'function') obj.geometry.dispose();
-              if (obj.material) {
-                const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
-                mats.forEach((m: any) => { if (m && typeof m.dispose === 'function') m.dispose(); });
-              }
             } catch (e) {}
           });
         }
@@ -872,7 +905,7 @@ export class ViewerManager {
           return {
             ...base,
             fileName: obj.fileName,
-            fileDataURL: obj.fileDataURL
+            fileDataURL: (obj.fileDataURL && obj.fileDataURL.length < 1500000) ? obj.fileDataURL : undefined
           };
         }
         return base;
@@ -1001,8 +1034,7 @@ export class ViewerManager {
                   const res = await fetch(obj.fileDataURL);
                   if (res.ok) {
                       const arrayBuffer = await res.arrayBuffer();
-                      const loader = new window.THREE.STLLoader();
-                      const geometry = loader.parse(arrayBuffer);
+                      const geometry = parseSTLGeometry(arrayBuffer);
                       if (modelRoot && window.THREE) { geometry.applyMatrix4(modelRoot.matrixWorld); }
                       geometry.computeBoundingBox();
                       geometry.computeBoundingSphere();
@@ -1081,15 +1113,35 @@ export class ViewerManager {
     }
   }
 
-  loadFiles(files: FileList | File[]) {
+  async loadFiles(files: FileList | File[]) {
     if (!files || files.length === 0) return;
+    const fileArray = Array.from(files);
+    const file = fileArray[0];
+    const filename = file.name;
+    const ext = filename.split('.').pop()?.toLowerCase() || '';
+
     this.resetWorkspace();
     this.loadedUrl = null;
-    const fileArray = Array.from(files);
-    const filename = fileArray[0].name;
+    this.config.onStatusChange(`Reading file: ${filename}...`, false, filename, null);
+    if (this.config.onProgressChange) this.config.onProgressChange(5);
 
-    this.config.onStatusChange('Loading model data...', false, filename, null);
-    
+    const supportedDirectExtensions = ['stl', 'ply', 'obj', 'gltf', 'glb'];
+    if (fileArray.length === 1 && supportedDirectExtensions.includes(ext)) {
+      try {
+        const { buffer } = await streamFileOrUrl(file, (percent, loaded, total, text) => {
+          if (this.config.onProgressChange) this.config.onProgressChange(percent);
+          if (text) this.config.onStatusChange(text, false, filename);
+        });
+
+        const parsed = await parseModelBufferDirectly(filename, buffer);
+        this.applyLoadedDirectModel(parsed.rootObject, filename);
+        return;
+      } catch (directErr) {
+        console.warn("Direct fast model loader encountered an issue, falling back to viewer importer:", directErr);
+      }
+    }
+
+    // Fallback to online-3d-viewer importer for multi-file collections or other formats
     try {
       this.viewer.LoadModelFromFileList(fileArray);
     } catch(e) { console.error(e); }
@@ -1097,23 +1149,124 @@ export class ViewerManager {
     this.waitForModelAndBuildTree(filename);
   }
 
-  loadUrl(url: string, cameraArgs?: number[]) {
+  async loadUrl(url: string, cameraArgs?: number[]) {
     if (!url) return;
     if (this.loadedUrl === url) {
       console.log("Model URL is already loaded or in progress of being loaded:", url);
       return;
     }
+    const filename = url.split('/').pop()?.split('?')[0] || 'Remote Model';
+    const ext = filename.split('.').pop()?.toLowerCase() || '';
+
     this.resetWorkspace();
     this.loadedUrl = url;
-    const filename = url.split('/').pop()?.split('?')[0] || 'Remote Model';
+    this.config.onStatusChange(`Loading model from URL...`, false, filename, url);
+    if (this.config.onProgressChange) this.config.onProgressChange(5);
 
-    this.config.onStatusChange('Loading model from URL...', false, filename, url);
-    
+    const supportedDirectExtensions = ['stl', 'ply', 'obj', 'gltf', 'glb'];
+    if (supportedDirectExtensions.includes(ext) || ext === '') {
+      try {
+        const { buffer, filename: fetchedName } = await streamFileOrUrl(url, (percent, loaded, total, text) => {
+          if (this.config.onProgressChange) this.config.onProgressChange(percent);
+          if (text) this.config.onStatusChange(text, false, filename, url);
+        });
+
+        const effectiveName = fetchedName || filename;
+        const parsed = await parseModelBufferDirectly(effectiveName, buffer);
+        this.applyLoadedDirectModel(parsed.rootObject, effectiveName, cameraArgs);
+        return;
+      } catch (directErr) {
+        console.warn("Direct fast URL loader encountered an issue, falling back to viewer importer:", directErr);
+      }
+    }
+
+    // Fallback to online-3d-viewer importer
     try {
       this.viewer.LoadModelFromUrlList([url]);
     } catch(e) { console.error(e); }
     
     this.waitForModelAndBuildTree(filename, cameraArgs);
+  }
+
+  applyLoadedDirectModel(rootObject: any, filename: string, pendingCamera?: number[]) {
+    if (!this.viewer || !this.viewer.viewer || !rootObject) return;
+    const v = this.viewer.viewer;
+    const scene = v.scene || v.mainScene;
+    if (!scene) return;
+
+    if (this.viewer.canvas) {
+      this.viewer.canvas.style.display = 'block';
+    }
+    if (this.viewer.progressDiv && this.viewer.progressDiv.parentNode) {
+      this.viewer.progressDiv.parentNode.removeChild(this.viewer.progressDiv);
+      this.viewer.progressDiv = null;
+    }
+
+    if (typeof v.SetMainObject === 'function') {
+      try {
+        if (v.edgeSettings) v.edgeSettings.showEdges = false;
+      } catch (e) {}
+      v.SetMainObject(rootObject);
+    } else {
+      scene.add(rootObject);
+    }
+
+    const box = new window.THREE.Box3().setFromObject(rootObject);
+    const sphere = new window.THREE.Sphere();
+    box.getBoundingSphere(sphere);
+    this.modelBBox = box;
+
+    if (typeof v.FitSphereToWindow === 'function') {
+      try { v.FitSphereToWindow(sphere, false); } catch(e) {}
+    }
+    if (typeof v.AdjustClippingPlanesToSphere === 'function') {
+      try { v.AdjustClippingPlanesToSphere(sphere); } catch(e) {}
+    } else if (typeof v.AdjustClippingPlanes === 'function') {
+      try { v.AdjustClippingPlanes(); } catch(e) {}
+    }
+
+    this.loadedFilename = filename;
+    this.buildModelTree();
+    this.setupExplosion();
+
+    if (v.navigation && typeof v.navigation.GetCamera === 'function') {
+      try {
+        const cam = v.navigation.GetCamera();
+        if (cam) {
+          this.defaultCamera = new window.OV.Camera(
+            new window.OV.Coord3D(cam.eye.x, cam.eye.y, cam.eye.z),
+            new window.OV.Coord3D(cam.center.x, cam.center.y, cam.center.z),
+            new window.OV.Coord3D(cam.up.x, cam.up.y, cam.up.z),
+            cam.fov || 45.0
+          );
+        }
+      } catch (e) {}
+    }
+
+    if (pendingCamera && v.navigation) {
+      try {
+        const c = pendingCamera;
+        const eye = new window.OV.Coord3D(c[0], c[1], c[2]);
+        const center = new window.OV.Coord3D(c[3], c[4], c[5]);
+        const up = new window.OV.Coord3D(c[6], c[7], c[8]);
+        v.navigation.SetCamera(new window.OV.Camera(eye, center, up, c[9] || 45.0));
+        this.defaultCamera = new window.OV.Camera(
+          new window.OV.Coord3D(eye.x, eye.y, eye.z),
+          new window.OV.Coord3D(center.x, center.y, center.z),
+          new window.OV.Coord3D(up.x, up.y, up.z),
+          c[9] || 45.0
+        );
+      } catch (e) {}
+    }
+
+    this.initTransformControls();
+    this.enforceFreeOrbit();
+    this.loadFromLocalStorage();
+
+    try { v.Render(); } catch (e) {}
+
+    if (this.config.onProgressChange) this.config.onProgressChange(100);
+    this.config.onStatusChange(`Model loaded successfully.\n**${filename}**`, false, filename, this.loadedUrl);
   }
 
   waitForModelAndBuildTree(filename: string, pendingCamera?: number[]) {
@@ -3707,20 +3860,21 @@ export class ViewerManager {
   }
 
   async importCustomPlanningModel(file: File) {
-      if (!window.THREE || !window.THREE.STLLoader) {
-          console.error('THREE.STLLoader not found');
-          return;
-      }
+      if (!window.THREE) return;
       
-      const fileDataURL = await new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onload = (e) => resolve(e.target?.result as string);
-          reader.readAsDataURL(file);
-      });
+      let fileDataURL = '';
+      if (file.size < 1000000) {
+          try {
+              fileDataURL = await new Promise<string>((resolve) => {
+                  const reader = new FileReader();
+                  reader.onload = (e) => resolve(e.target?.result as string);
+                  reader.readAsDataURL(file);
+              });
+          } catch (e) {}
+      }
 
       const arrayBuffer = await file.arrayBuffer();
-      const loader = new window.THREE.STLLoader();
-      const geometry = loader.parse(arrayBuffer);
+      const geometry = parseSTLGeometry(arrayBuffer);
 
       if (!this.viewer || !this.viewer.viewer) return;
       const scene = this.viewer.viewer.scene || this.viewer.viewer.mainScene;
@@ -5448,8 +5602,7 @@ It contains both Slicer markup properties and the application's internal groupin
                       continue;
                   }
 
-                  const loader = new window.THREE.STLLoader();
-                  const geometry = loader.parse(arrayBuffer);
+                  const geometry = parseSTLGeometry(arrayBuffer);
                   if (modelRoot && window.THREE) { geometry.applyMatrix4(modelRoot.matrixWorld); }
                   geometry.computeBoundingBox();
                   geometry.computeBoundingSphere();

@@ -1,4 +1,4 @@
-import { Menu, Link, Share2, Ruler, Moon, Sun, PenTool, Camera, RotateCcw } from 'lucide-react';
+import { Layers, Link, Share2, Ruler, Moon, Sun, PenTool, Camera, RotateCcw } from 'lucide-react';
 import { useViewer } from '../context/ViewerContext';
 
 export function Header({ toggleSidebar }: { toggleSidebar: () => void }) {
@@ -21,7 +21,7 @@ export function Header({ toggleSidebar }: { toggleSidebar: () => void }) {
       
       <div className="flex items-center gap-1.5 flex-wrap w-full md:w-auto justify-start md:justify-end text-zinc-500 dark:text-zinc-400">
         <button className="w-8 h-8 rounded shrink-0 flex items-center justify-center transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-blue-600 dark:hover:text-blue-400" onClick={toggleSidebar} title="Toggle Sidebar">
-          <Menu size={18} />
+          <Layers size={18} />
         </button>
         
         <button className="w-8 h-8 rounded shrink-0 flex items-center justify-center transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-blue-600 dark:hover:text-blue-400" onClick={() => setActiveModal('url')} title="Load from URL">
