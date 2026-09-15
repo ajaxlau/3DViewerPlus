@@ -12,7 +12,7 @@ export function Header({ toggleSidebar }: { toggleSidebar: () => void }) {
         <img 
           src="./3DPO_Small_Logo.png" 
           alt="3DPO Logo" 
-          className="h-6 w-auto max-w-[150px] object-contain mix-blend-multiply dark:mix-blend-screen dark:invert dark:hue-rotate-180" 
+          className="h-6 w-auto max-w-[150px] object-contain" 
         />
         <span className="whitespace-nowrap md:text-[14px] text-xs truncate max-w-[200px] md:max-w-none">
           NTEC 3DPO - Medical 3D Viewer<sup>+</sup>

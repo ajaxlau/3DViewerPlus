@@ -3,6 +3,7 @@ import { useViewer } from '../context/ViewerContext';
 import { QRCodeSVG } from 'qrcode.react';
 import JSZip from 'jszip';
 import { RotateCcw, AlertTriangle } from 'lucide-react';
+import logoImg from '../assets/logo.png';
 
 export function Modals() {
   const { activeModal, setActiveModal, filename, loadedUrl, isEmpty, resetWorkspace } = useViewer();
@@ -344,8 +345,27 @@ export function Modals() {
                   Scan the QR code or copy the link below to share this model:
                 </p>
                 <div className="flex flex-col gap-4 mb-6">
-                  <div className="bg-white p-4 rounded-md border border-zinc-200 dark:border-zinc-800 mx-auto">
-                    <QRCodeSVG value={shareVal} size={160} level={"H"} />
+                  <div className="bg-white p-4 rounded-md border border-zinc-200 dark:border-zinc-800 mx-auto shadow-sm flex items-center justify-center relative">
+                    <QRCodeSVG 
+                      value={shareVal} 
+                      size={168} 
+                      level={"H"} 
+                      imageSettings={{
+                        src: logoImg,
+                        x: undefined,
+                        y: undefined,
+                        height: 38,
+                        width: 38,
+                        excavate: true,
+                      }}
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                      <img 
+                        src={logoImg} 
+                        alt="3DPO Logo" 
+                        className="w-[36px] h-[36px] object-contain"
+                      />
+                    </div>
                   </div>
                   <input readOnly value={shareVal} className="w-full p-3 border border-zinc-300 dark:border-zinc-700 rounded-sm bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 font-mono text-sm outline-none" />
                 </div>
