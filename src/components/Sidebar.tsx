@@ -415,7 +415,7 @@ export function Sidebar({ collapsed, onClose }: { collapsed: boolean, onClose?: 
               <div className="flex justify-between items-center">
                 <div className="flex flex-col">
                   <label className="text-[10px] text-zinc-500 dark:text-zinc-400 uppercase tracking-widest font-semibold cursor-pointer" onClick={() => setIsGhostingMode(!isGhostingMode)}>FOCUS X-RAY MODE</label>
-                  <span className="text-[9px] text-zinc-400">Highlights target with semi-transparent X-ray context</span>
+                  <span className="text-[9px] text-zinc-400">Shows target in original color with semi-transparent X-ray context</span>
                 </div>
                 <label className="switch mb-0 shrink-0 ml-2">
                   <input type="checkbox" checked={isGhostingMode} onChange={(e) => setIsGhostingMode(e.target.checked)} />

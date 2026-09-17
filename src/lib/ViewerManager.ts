@@ -115,7 +115,7 @@ export class ViewerManager {
 
   // Smart Ghosting / Focus-X-Ray State
   isGhostingMode: boolean = false;
-  ghostedOriginals: Map<any, { color: number | null, opacity: number, transparent: boolean, depthWrite: boolean, emissive: number | null, map: any, roughness: number | null, metalness: number | null }> = new Map();
+  ghostedOriginals: Map<any, { color: number | null, opacity: number, transparent: boolean, depthWrite: boolean, emissive: number | null, map: any, roughness: number | null, metalness: number | null, shininess?: number | null, specular?: number | null, vertexColors?: any }> = new Map();
 
   // Curved Anatomical Fly-Through (Virtual Endoscopy / Vessel Probe) State
   flyThroughState: FlyThroughState = {
@@ -5778,42 +5778,73 @@ It contains both Slicer markup properties and the application's internal groupin
                         color: ghostOrig && ghostOrig.color !== null ? ghostOrig.color : (mat.color ? mat.color.getHex() : 0xcccccc),
                         roughness: ghostOrig && ghostOrig.roughness !== null ? ghostOrig.roughness : (mat.roughness !== undefined ? mat.roughness : null),
                         metalness: ghostOrig && ghostOrig.metalness !== null ? ghostOrig.metalness : (mat.metalness !== undefined ? mat.metalness : null),
-                        shininess: mat.shininess !== undefined ? mat.shininess : null,
-                        specular: mat.specular !== undefined && mat.specular.getHex ? mat.specular.getHex() : null,
-                        vertexColors: mat.vertexColors !== undefined ? mat.vertexColors : null,
+                        shininess: ghostOrig && ghostOrig.shininess !== null ? ghostOrig.shininess : (mat.shininess !== undefined ? mat.shininess : null),
+                        specular: ghostOrig && ghostOrig.specular !== null ? ghostOrig.specular : (mat.specular !== undefined && mat.specular.getHex ? mat.specular.getHex() : null),
+                        vertexColors: ghostOrig && ghostOrig.vertexColors !== null ? ghostOrig.vertexColors : (mat.vertexColors !== undefined ? mat.vertexColors : null),
                         map: ghostOrig && ghostOrig.map !== undefined ? ghostOrig.map : (mat.map !== undefined ? mat.map : null),
                         emissive: ghostOrig && ghostOrig.emissive !== null ? ghostOrig.emissive : ((mat.emissive !== undefined && mat.emissive.getHex) ? mat.emissive.getHex() : null),
                     });
                 }
                 
-                // Set the beautiful reflective light blue color from the reference
-                if (mat.color) {
-                    mat.color.setHex(0xaed8f2);
-                }
-                
-                // Disable vertex coloring and textures temporarily so the color is exact and not mixed
-                if (mat.vertexColors !== undefined) {
-                    mat.vertexColors = typeof mat.vertexColors === 'number' ? 0 : false;
-                }
-                if (mat.map !== undefined) {
-                    mat.map = null;
-                }
-                if (mat.emissive !== undefined && mat.emissive.setHex) {
-                    mat.emissive.setHex(0x000000);
-                }
-                
-                // Enhance reflectivity and shine
-                if (mat.roughness !== undefined) {
-                    mat.roughness = 0.11; // smooth reflective surface
-                }
-                if (mat.metalness !== undefined) {
-                    mat.metalness = 0.18; // elegant slight metallic reflection
-                }
-                if (mat.shininess !== undefined) {
-                    mat.shininess = 80; // high gloss for Phong material
-                }
-                if (mat.specular !== undefined && mat.specular.setHex) {
-                    mat.specular.setHex(0xffffff); // pure white specular reflecting light
+                if (!this.isGhostingMode) {
+                    // Standard selection: Set the reflective light blue color
+                    if (mat.color) {
+                        mat.color.setHex(0xaed8f2);
+                    }
+                    
+                    // Disable vertex coloring and textures temporarily so the color is exact and not mixed
+                    if (mat.vertexColors !== undefined) {
+                        mat.vertexColors = typeof mat.vertexColors === 'number' ? 0 : false;
+                    }
+                    if (mat.map !== undefined) {
+                        mat.map = null;
+                    }
+                    if (mat.emissive !== undefined && mat.emissive.setHex) {
+                        mat.emissive.setHex(0x000000);
+                    }
+                    
+                    // Enhance reflectivity and shine
+                    if (mat.roughness !== undefined) {
+                        mat.roughness = 0.11; // smooth reflective surface
+                    }
+                    if (mat.metalness !== undefined) {
+                        mat.metalness = 0.18; // elegant slight metallic reflection
+                    }
+                    if (mat.shininess !== undefined) {
+                        mat.shininess = 80; // high gloss for Phong material
+                    }
+                    if (mat.specular !== undefined && mat.specular.setHex) {
+                        mat.specular.setHex(0xffffff); // pure white specular reflecting light
+                    }
+                } else {
+                    // Focus X-Ray mode: Display selected mesh in its ORIGINAL color and texture
+                    const orig = this.originalColors.get(mat);
+                    if (orig) {
+                        if (mat.color && orig.color !== null) {
+                            mat.color.setHex(orig.color);
+                        }
+                        if (orig.roughness !== null && mat.roughness !== undefined) {
+                            mat.roughness = orig.roughness;
+                        }
+                        if (orig.metalness !== null && mat.metalness !== undefined) {
+                            mat.metalness = orig.metalness;
+                        }
+                        if (orig.shininess !== null && mat.shininess !== undefined) {
+                            mat.shininess = orig.shininess;
+                        }
+                        if (orig.specular !== null && mat.specular !== undefined && mat.specular.setHex) {
+                            mat.specular.setHex(orig.specular);
+                        }
+                        if (orig.vertexColors !== null && mat.vertexColors !== undefined) {
+                            mat.vertexColors = orig.vertexColors;
+                        }
+                        if (orig.map !== null && mat.map !== undefined) {
+                            mat.map = orig.map;
+                        }
+                        if (orig.emissive !== null && mat.emissive !== undefined && mat.emissive.setHex) {
+                            mat.emissive.setHex(orig.emissive);
+                        }
+                    }
                 }
                 
                 mat.needsUpdate = true;
@@ -5836,7 +5867,7 @@ It contains both Slicer markup properties and the application's internal groupin
               if (this.originalColors.has(mat)) {
                   const orig = this.originalColors.get(mat);
                   if (orig) {
-                      if (mat.color) {
+                      if (mat.color && orig.color !== null) {
                           mat.color.setHex(orig.color);
                       }
                       if (orig.roughness !== null && mat.roughness !== undefined) {
@@ -5874,9 +5905,42 @@ It contains both Slicer markup properties and the application's internal groupin
   setGhostingMode(enabled: boolean) {
     this.isGhostingMode = enabled;
     if (enabled) {
+      // If a mesh is currently highlighted, ensure its color is rendered in original color
+      if (this.highlightedMesh && this.highlightedMesh.material) {
+        const materials = Array.isArray(this.highlightedMesh.material) ? this.highlightedMesh.material : [this.highlightedMesh.material];
+        materials.forEach((mat: any) => {
+          const orig = this.originalColors.get(mat);
+          if (orig) {
+            if (orig.color !== null && mat.color) mat.color.setHex(orig.color);
+            if (orig.roughness !== null && mat.roughness !== undefined) mat.roughness = orig.roughness;
+            if (orig.metalness !== null && mat.metalness !== undefined) mat.metalness = orig.metalness;
+            if (orig.shininess !== null && mat.shininess !== undefined) mat.shininess = orig.shininess;
+            if (orig.specular !== null && mat.specular !== undefined && mat.specular.setHex) mat.specular.setHex(orig.specular);
+            if (orig.vertexColors !== null && mat.vertexColors !== undefined) mat.vertexColors = orig.vertexColors;
+            if (orig.map !== null && mat.map !== undefined) mat.map = orig.map;
+            if (orig.emissive !== null && mat.emissive && mat.emissive.setHex) mat.emissive.setHex(orig.emissive);
+            mat.needsUpdate = true;
+          }
+        });
+      }
       this.applyGhostingMode();
     } else {
       this.revertGhostingMode();
+      // If a mesh is still selected when exiting Focus X-Ray mode, apply standard reflective highlight
+      if (this.highlightedMesh && this.highlightedMesh.material) {
+        const materials = Array.isArray(this.highlightedMesh.material) ? this.highlightedMesh.material : [this.highlightedMesh.material];
+        materials.forEach((mat: any) => {
+          if (mat.color) mat.color.setHex(0xaed8f2);
+          if (mat.vertexColors !== undefined) mat.vertexColors = typeof mat.vertexColors === 'number' ? 0 : false;
+          if (mat.map !== undefined) mat.map = null;
+          if (mat.emissive !== undefined && mat.emissive.setHex) mat.emissive.setHex(0x000000);
+          if (mat.roughness !== undefined) mat.roughness = 0.11;
+          if (mat.metalness !== undefined) mat.metalness = 0.18;
+          if (mat.shininess !== undefined) mat.shininess = 80;
+          if (mat.specular !== undefined && mat.specular.setHex) mat.specular.setHex(0xffffff);
+          mat.needsUpdate = true;
+        });
+      }
     }
     if (this.viewer?.viewer) {
       try { this.viewer.viewer.Render(); } catch(e) {}
@@ -5893,17 +5957,21 @@ It contains both Slicer markup properties and the application's internal groupin
       const materials = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
       materials.forEach((mat: any) => {
         if (!isTarget) {
-          // Save original properties once
+          // Save original properties once (using originalColors if available)
           if (!this.ghostedOriginals.has(mat)) {
+            const origColorObj = this.originalColors.get(mat);
             this.ghostedOriginals.set(mat, {
-              color: mat.color ? mat.color.getHex() : null,
+              color: origColorObj && origColorObj.color !== null ? origColorObj.color : (mat.color ? mat.color.getHex() : null),
               opacity: mat.opacity !== undefined ? mat.opacity : 1,
               transparent: !!mat.transparent,
               depthWrite: mat.depthWrite !== undefined ? mat.depthWrite : true,
-              emissive: (mat.emissive && mat.emissive.getHex) ? mat.emissive.getHex() : null,
-              map: mat.map !== undefined ? mat.map : null,
-              roughness: mat.roughness !== undefined ? mat.roughness : null,
-              metalness: mat.metalness !== undefined ? mat.metalness : null
+              emissive: origColorObj && origColorObj.emissive !== null ? origColorObj.emissive : ((mat.emissive && mat.emissive.getHex) ? mat.emissive.getHex() : null),
+              map: origColorObj && origColorObj.map !== undefined ? origColorObj.map : (mat.map !== undefined ? mat.map : null),
+              roughness: origColorObj && origColorObj.roughness !== null ? origColorObj.roughness : (mat.roughness !== undefined ? mat.roughness : null),
+              metalness: origColorObj && origColorObj.metalness !== null ? origColorObj.metalness : (mat.metalness !== undefined ? mat.metalness : null),
+              shininess: origColorObj && origColorObj.shininess !== null ? origColorObj.shininess : (mat.shininess !== undefined ? mat.shininess : null),
+              specular: origColorObj && origColorObj.specular !== null ? origColorObj.specular : (mat.specular !== undefined && mat.specular.getHex ? mat.specular.getHex() : null),
+              vertexColors: origColorObj && origColorObj.vertexColors !== null ? origColorObj.vertexColors : (mat.vertexColors !== undefined ? mat.vertexColors : null),
             });
           }
           // Ghost style: semi-transparent, cyan-tinted x-ray silhouette
@@ -5914,20 +5982,51 @@ It contains both Slicer markup properties and the application's internal groupin
           if (mat.emissive && mat.emissive.setHex) mat.emissive.setHex(0x11283c);
           mat.needsUpdate = true;
         } else {
-          // Target structure: restore to solid full opacity or preserve highlight
+          // Target structure: restore to solid full opacity and ORIGINAL COLOR
           if (this.ghostedOriginals.has(mat)) {
             const orig = this.ghostedOriginals.get(mat)!;
             mat.transparent = orig.transparent;
             mat.opacity = orig.opacity;
             mat.depthWrite = orig.depthWrite;
-            if (!this.highlightedMesh && orig.color !== null && mat.color) {
+            if (orig.color !== null && mat.color) {
               mat.color.setHex(orig.color);
             }
             if (orig.emissive !== null && mat.emissive && mat.emissive.setHex) {
               mat.emissive.setHex(orig.emissive);
             }
+            if (orig.roughness !== null && mat.roughness !== undefined) {
+              mat.roughness = orig.roughness;
+            }
+            if (orig.metalness !== null && mat.metalness !== undefined) {
+              mat.metalness = orig.metalness;
+            }
+            if (orig.shininess !== null && mat.shininess !== undefined) {
+              mat.shininess = orig.shininess;
+            }
+            if (orig.specular !== null && mat.specular !== undefined && mat.specular.setHex) {
+              mat.specular.setHex(orig.specular);
+            }
+            if (orig.vertexColors !== null && mat.vertexColors !== undefined) {
+              mat.vertexColors = orig.vertexColors;
+            }
+            if (orig.map !== null && mat.map !== undefined) {
+              mat.map = orig.map;
+            }
             this.ghostedOriginals.delete(mat);
             mat.needsUpdate = true;
+          } else {
+            const orig = this.originalColors.get(mat);
+            if (orig) {
+              if (orig.color !== null && mat.color) mat.color.setHex(orig.color);
+              if (orig.emissive !== null && mat.emissive && mat.emissive.setHex) mat.emissive.setHex(orig.emissive);
+              if (orig.roughness !== null && mat.roughness !== undefined) mat.roughness = orig.roughness;
+              if (orig.metalness !== null && mat.metalness !== undefined) mat.metalness = orig.metalness;
+              if (orig.shininess !== null && mat.shininess !== undefined) mat.shininess = orig.shininess;
+              if (orig.specular !== null && mat.specular !== undefined && mat.specular.setHex) mat.specular.setHex(orig.specular);
+              if (orig.vertexColors !== null && mat.vertexColors !== undefined) mat.vertexColors = orig.vertexColors;
+              if (orig.map !== null && mat.map !== undefined) mat.map = orig.map;
+              mat.needsUpdate = true;
+            }
           }
         }
       });
@@ -5935,7 +6034,7 @@ It contains both Slicer markup properties and the application's internal groupin
   }
 
   revertGhostingMode() {
-    this.ghostedOriginals.forEach((orig, mat) => {
+    this.ghostedOriginals.forEach((orig: any, mat: any) => {
       mat.transparent = orig.transparent;
       mat.opacity = orig.opacity;
       mat.depthWrite = orig.depthWrite;
@@ -5950,6 +6049,24 @@ It contains both Slicer markup properties and the application's internal groupin
         }
         if (orig.emissive !== null && mat.emissive && mat.emissive.setHex) {
           mat.emissive.setHex(orig.emissive);
+        }
+        if (orig.roughness !== null && mat.roughness !== undefined) {
+          mat.roughness = orig.roughness;
+        }
+        if (orig.metalness !== null && mat.metalness !== undefined) {
+          mat.metalness = orig.metalness;
+        }
+        if (orig.shininess !== null && mat.shininess !== undefined) {
+          mat.shininess = orig.shininess;
+        }
+        if (orig.specular !== null && mat.specular !== undefined && mat.specular.setHex) {
+          mat.specular.setHex(orig.specular);
+        }
+        if (orig.vertexColors !== null && mat.vertexColors !== undefined) {
+          mat.vertexColors = orig.vertexColors;
+        }
+        if (orig.map !== null && mat.map !== undefined) {
+          mat.map = orig.map;
         }
       }
       mat.needsUpdate = true;
