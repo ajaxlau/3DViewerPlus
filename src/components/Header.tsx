@@ -1,5 +1,34 @@
-import { Menu, Link, Share2, Ruler, Moon, Sun, PenTool, Camera, RotateCcw } from 'lucide-react';
+import { Link, Share2, Ruler, Moon, Sun, PenTool, Camera, RotateCcw } from 'lucide-react';
 import { useViewer } from '../context/ViewerContext';
+
+// Custom icon: 3 parallel menu lines with an overlaid eye, middle line broken around pupil
+export function VisualizationMenuIcon({ size = 18, className = "" }: { size?: number; className?: string }) {
+  return (
+    <svg 
+      width={size} 
+      height={size} 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="2" 
+      strokeLinecap="round" 
+      strokeLinejoin="round" 
+      className={className}
+    >
+      {/* Top and bottom parallel lines */}
+      <line x1="3" y1="5" x2="21" y2="5" />
+      <line x1="3" y1="19" x2="21" y2="19" />
+      
+      {/* Middle line broken so it does not cross over the center pupil */}
+      <line x1="3" y1="12" x2="8" y2="12" />
+      <line x1="16" y1="12" x2="21" y2="12" />
+      
+      {/* Eye outline and central pupil */}
+      <path d="M2 12s3.5-6.5 10-6.5 10 6.5 10 6.5-3.5 6.5-10 6.5-10-6.5-10-6.5Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
 
 export function Header({ toggleSidebar }: { toggleSidebar: () => void }) {
   const { 
@@ -20,8 +49,8 @@ export function Header({ toggleSidebar }: { toggleSidebar: () => void }) {
       </div>
       
       <div className="flex items-center gap-1.5 flex-wrap w-full md:w-auto justify-start md:justify-end text-zinc-500 dark:text-zinc-400">
-        <button className="w-8 h-8 rounded shrink-0 flex items-center justify-center transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-blue-600 dark:hover:text-blue-400" onClick={toggleSidebar} title="Toggle Sidebar">
-          <Menu size={18} />
+        <button className="w-8 h-8 rounded shrink-0 flex items-center justify-center transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-blue-600 dark:hover:text-blue-400" onClick={toggleSidebar} title="Toggle Visualization Tools">
+          <VisualizationMenuIcon size={18} />
         </button>
         
         <button className="w-8 h-8 rounded shrink-0 flex items-center justify-center transition-colors hover:bg-zinc-100 dark:hover:bg-zinc-800 hover:text-blue-600 dark:hover:text-blue-400" onClick={() => setActiveModal('url')} title="Load from URL">
