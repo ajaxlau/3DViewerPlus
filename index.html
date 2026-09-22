@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Redirecting...</title>
+    <!-- Fallback redirect in case JavaScript is completely disabled in the client browser -->
+    <noscript>
+        <meta http-equiv="refresh" content="0;url=https://ajaxlau.github.io/3DViewerPlus/">
+    </noscript>
+    <script>
+        (function() {
+            // Target base domain
+            const DESTINATION_BASE = "https://ajaxlau.github.io/Med3DViewer/";
+            
+            // Build the absolute target with existing parameters and hashes intact
+            const targetUrl = DESTINATION_BASE + window.location.search + window.location.hash;
+            
+            // Instantly replace the history entry to execute the redirect without delay
+            window.location.replace(targetUrl);
+        })();
+    </script>
+</head>
+<body style="background-color: #0f172a;">
+    <!-- Keep body completely black/dark and empty to prevent any jarring white flashing while rendering -->
+</body>
+</html>
